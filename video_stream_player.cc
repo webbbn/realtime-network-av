@@ -36,9 +36,6 @@ class FFmpegStreamDestination {
 public:
   FFmpegStreamDestination(AVCodecID decoder) : m_sws_ctx(0) {
 
-    // Register all the codecs
-    avcodec_register_all();
-
     // Allocate the packet
     if (!(m_packet = av_packet_alloc())) {
       std::cerr << "Error allocating a packet" << std::endl;
@@ -77,7 +74,7 @@ public:
     av_parser_close(m_parser);
     avcodec_close(m_pCodecCtx);
     av_free(m_pFrame);
-    av_free_packet(m_packet);
+    av_packet_unref(m_packet);
     SDL_DestroyTexture(m_texture);
     SDL_DestroyRenderer(m_renderer);
     SDL_DestroyWindow(m_screen);
@@ -106,61 +103,67 @@ public:
 
       // Decode the packet.
       if (m_packet->size) {
-	int framefinished=0;
-	int nres = avcodec_decode_video2(m_pCodecCtx, m_pFrame, &framefinished, m_packet);
+	if (avcodec_send_packet(m_pCodecCtx, m_packet) < 0) {
+	  std::cerr << "Error in avcodec_send_packet" << std::endl;
+	  return false;
+	}
+	int ret = avcodec_receive_frame(m_pCodecCtx, m_pFrame);
+	if (ret < 0) {
+	  return ((ret != AVERROR(EAGAIN)) && (ret != AVERROR_EOF));
+	}
 
-	if(framefinished) {
-	  int width = m_pCodecCtx->width;
-	  int height = m_pCodecCtx->height;
+	// Did we decoded a frame parsed out of the stream
+	int width = m_pCodecCtx->width;
+	int height = m_pCodecCtx->height;
 
-	  // Allocate the conversion context
-	  if (m_sws_ctx == 0) {
+	// Allocate the conversion context
+	if (m_sws_ctx == 0) {
 
-	    // initialize SWS context for software scaling
-	    m_sws_ctx = sws_getContext(width, height, m_pCodecCtx->pix_fmt, width, height,
-				       AV_PIX_FMT_YUV420P, SWS_BILINEAR, NULL, NULL, NULL);
+	  // initialize SWS context for software scaling
+	  m_sws_ctx = sws_getContext(width, height, m_pCodecCtx->pix_fmt, width, height,
+				     AV_PIX_FMT_YUV420P, SWS_BILINEAR, NULL, NULL, NULL);
 
-	    // Create the playback window.
-	    m_screen = SDL_CreateWindow("UDP Video Player", SDL_WINDOWPOS_UNDEFINED,
-					SDL_WINDOWPOS_UNDEFINED, width, height, 0);
+	  // Create the playback window.
+	  m_screen = SDL_CreateWindow("UDP Video Player", SDL_WINDOWPOS_UNDEFINED,
+				      SDL_WINDOWPOS_UNDEFINED, width, height, 0);
 
-	    // Create the renderer
-	    m_renderer = SDL_CreateRenderer(m_screen, -1, 0);
-	    if (!m_renderer) {
-	      std::cerr << "SDL: cound not create the SDL renderer\n";
-	      return false;
-	    }
-
-	    // Allocate a place to put our YUV image on that screen
-	    m_texture = SDL_CreateTexture(m_renderer, SDL_PIXELFORMAT_YV12, SDL_TEXTUREACCESS_STREAMING, width, height);
-	    if (!m_texture) {
-	      std::cerr << "SDL: could not create the SDL texture\n";
-	      return false;
-	    }
-
-	    // set up YV12 pixel array (12 bits per pixel)
-	    int y_plane_size = width * height;
-	    int uv_plane_size = width * height / 4;
-	    m_y_plane = (uint8_t*)malloc(y_plane_size);
-	    m_u_plane = (uint8_t*)malloc(uv_plane_size);
-	    m_v_plane = (uint8_t*)malloc(uv_plane_size);
-	    if (!m_y_plane || !m_u_plane || !m_v_plane) {
-	      std::cerr << "Could not allocate the pixel buffers\n";
-	      return false;
-	    }
+	  // Create the renderer
+	  m_renderer = SDL_CreateRenderer(m_screen, -1, 0);
+	  if (!m_renderer) {
+	    std::cerr << "SDL: cound not create the SDL renderer\n";
+	    return false;
 	  }
 
-	  // Convert the image into YUV format that SDL uses
-	  AVPicture pict;
-	  int uv_pitch = width / 2;
-	  pict.data[0] = m_y_plane;
-	  pict.data[1] = m_u_plane;
-	  pict.data[2] = m_v_plane;
-	  pict.linesize[0] = width;
-	  pict.linesize[1] = uv_pitch;
-	  pict.linesize[2] = uv_pitch;
-	  sws_scale(m_sws_ctx, (uint8_t const * const *)m_pFrame->data,
-		    m_pFrame->linesize, 0, height, pict.data, pict.linesize);
+	  // Allocate a place to put our YUV image on that screen
+	  m_texture = SDL_CreateTexture(m_renderer, SDL_PIXELFORMAT_YV12, SDL_TEXTUREACCESS_STREAMING, width, height);
+	  if (!m_texture) {
+	    std::cerr << "SDL: could not create the SDL texture\n";
+	    return false;
+	  }
+
+	  // set up YV12 pixel array (12 bits per pixel)
+	  int y_plane_size = width * height;
+	  int uv_plane_size = width * height / 4;
+	  m_y_plane = (uint8_t*)malloc(y_plane_size);
+	  m_u_plane = (uint8_t*)malloc(uv_plane_size);
+	  m_v_plane = (uint8_t*)malloc(uv_plane_size);
+	  if (!m_y_plane || !m_u_plane || !m_v_plane) {
+	    std::cerr << "Could not allocate the pixel buffers\n";
+	    return false;
+	  }
+	}
+
+	// Convert the image into YUV format that SDL uses
+	AVFrame pict;
+	int uv_pitch = width / 2;
+	pict.data[0] = m_y_plane;
+	pict.data[1] = m_u_plane;
+	pict.data[2] = m_v_plane;
+	pict.linesize[0] = width;
+	pict.linesize[1] = uv_pitch;
+	pict.linesize[2] = uv_pitch;
+	sws_scale(m_sws_ctx, (uint8_t const * const *)m_pFrame->data,
+		  m_pFrame->linesize, 0, height, pict.data, pict.linesize);
 
 	  // Update the texture
 	  SDL_UpdateYUVTexture(m_texture, NULL, m_y_plane, width, m_u_plane, uv_pitch, m_v_plane, uv_pitch);
@@ -171,8 +174,7 @@ public:
 	  SDL_RenderPresent(m_renderer);
 	}
       }
-    }
-
+  
     return true;
   }
   
