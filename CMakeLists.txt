@@ -49,3 +49,16 @@ if (USE_RTAUDIO)
   target_link_libraries(udp_audio_server rtaudio ws2_32)
 
 endif()
+
+find_package(SDL2)
+
+# To find and use ffmpeg avcodec library
+find_path(AVCODEC_INCLUDE_DIR libavcodec/avcodec.h)
+find_library(AVCODEC_LIBRARY avcodec)
+find_library(AVUTIL_LIBRARY avutil)
+find_library(SWSCALE_LIBRARY swscale)
+
+if (SDL2_FOUND)
+  add_executable(video_stream_player video_stream_player.cc)
+  target_link_libraries(video_stream_player ${AVCODEC_LIBRARY} ${AVUTIL_LIBRARY} ${SWSCALE_LIBRARY} ${SDL2_LIBRARIES} ws2_32)
+endif()
