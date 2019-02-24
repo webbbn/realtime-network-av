@@ -1,8 +1,20 @@
 #include <sys/types.h>
-#include <winsock2.h>
 #include <stdio.h>
 #include <iostream>
 #include <functional>
+
+#ifdef _WIN32
+#include <winsock2.h>
+typedef int socklen_t;
+#else
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <netdb.h>
+#include <unistd.h>
+typedef int SOCKET;
+typedef struct sockaddr SOCKADDR;
+#define closesocket(s) close(s)
+#endif
 
 extern "C" {
 #include <libavcodec/avcodec.h>
@@ -179,33 +191,13 @@ protected:
   uint8_t *m_v_plane;
 };
 
-bool ConnectToHost(SOCKET &s, int PortNo, char* IPAddress) {
-
-  // Create the socket.
-  s = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-  if (s == INVALID_SOCKET) {
-    return false;
-  }
-
-  // Fill out the information needed to initialize a socket
-  SOCKADDR_IN target;
-  target.sin_family = AF_INET;
-  target.sin_port = htons(PortNo);
-  target.sin_addr.s_addr = inet_addr(IPAddress);
-
-  // Try to connect to the server
-  if (connect(s, (SOCKADDR *)&target, sizeof(target)) == SOCKET_ERROR) {
-    return false;
-  }
-
-  return true;
-}
-
 int main(int argc, char* argv[]) {
 
+#ifdef _WIN32
   // Initialize the socket interface
   WSADATA wsaData;
   WSAStartup(MAKEWORD(2, 2), &wsaData);
+#endif
 
   // Create a recieve socket
   struct sockaddr_in local;
@@ -218,6 +210,7 @@ int main(int argc, char* argv[]) {
   // Bind to the UDPsocket
   bind(socketC, (sockaddr*)&local, sizeof(local));
 #else
+#ifdef _WIN32
   local.sin_addr.s_addr = inet_addr(IP_ADDRESS);
   SOCKET socketC = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 
@@ -226,6 +219,23 @@ int main(int argc, char* argv[]) {
     std::cerr << "Error connecting to the server" << std::endl;
     exit(1);
   }
+#else
+  struct hostent *server = gethostbyname(IP_ADDRESS);
+  if (server == NULL) {
+    std::cerr << "ERROR, no such host: " << IP_ADDRESS << std::endl;
+    exit(-1);
+  }
+  bzero((char *)&local, sizeof(local));
+  local.sin_family = AF_INET;
+  bcopy((char *)server->h_addr, (char *)&local.sin_addr.s_addr, server->h_length);
+  SOCKET socketC = socket(AF_INET, SOCK_STREAM, 0);
+
+  // Connect to the TCP socket
+  if (connect(socketC, (SOCKADDR *)&local, sizeof(local)) < 0) {
+    std::cerr << "Error connecting to the server" << std::endl;
+    exit(1);
+  }
+#endif
 #endif
 
   // Create the h264 decoder class.
@@ -243,7 +253,7 @@ int main(int argc, char* argv[]) {
 
     // Try to read UDP packets
     struct sockaddr_in from;
-    int from_len = sizeof(from);
+    socklen_t from_len = sizeof(from);
     int rec_len = recvfrom(socketC, reinterpret_cast<char*>(buffer), PACKET_SIZE, 0,
 			   (sockaddr*)&from, &from_len);
     if (rec_len > 0) {
