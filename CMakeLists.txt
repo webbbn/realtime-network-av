@@ -12,9 +12,12 @@ if (WIN32)
 endif()
 
 if (USE_OMX)
+
   include_directories(/opt/vc/include /opt/vc/include/interface/vcos/pthreads /opt/vc/include/interface/vmcs_host/linux)
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DSTANDALONE -D__STDC_CONSTANT_MACROS -D__STDC_LIMIT_MACROS -DTARGET_POSIX -D_LINUX -DPIC -D_REENTRANT -D_LARGEFILE64_SOURCE -D_FILE_OFFSET_BITS=64 -U_FORTIFY_SOURCE -DHAVE_LIBOPENMAX=2 -DOMX -DOMX_SKIP64BIT -ftree-vectorize -pipe -DUSE_EXTERNAL_OMX -DHAVE_LIBBCM_HOST -DUSE_EXTERNAL_LIBBCM_HOST -DUSE_VCHIQ_ARM")
+  link_directories("/opt/vc/lib")
   add_executable(rpi-camera-server rpi-camera-server.c)
+  target_link_libraries(rpi-camera-server openmaxil bcm_host vcos pthread)
 endif (USE_OMX)
 
 if (USE_RTAUDIO)
