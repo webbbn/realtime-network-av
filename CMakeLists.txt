@@ -11,6 +11,23 @@ if (WIN32)
   set(Extra_Libraries "ws2_32")
 endif()
 
+# We have submodule, so we need git to update the submodule
+find_package(Git QUIET)
+
+# Update submodules as needed
+if(GIT_FOUND AND EXISTS "${PROJECT_SOURCE_DIR}/.git")
+  option(GIT_SUBMODULE "Check submodules during build" ON)
+  if(GIT_SUBMODULE)
+    message(STATUS "Submodule update")
+    execute_process(COMMAND ${GIT_EXECUTABLE} submodule update --init --recursive
+      WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+      RESULT_VARIABLE GIT_SUBMOD_RESULT)
+    if(NOT GIT_SUBMOD_RESULT EQUAL "0")
+      message(FATAL_ERROR "git submodule update --init failed with ${GIT_SUBMOD_RESULT}, please checkout submodules")
+    endif()
+  endif()
+endif()
+
 if (USE_OMX)
 
   include_directories(/opt/vc/include /opt/vc/include/interface/vcos/pthreads /opt/vc/include/interface/vmcs_host/linux)
@@ -21,23 +38,6 @@ if (USE_OMX)
 endif (USE_OMX)
 
 if (USE_RTAUDIO)
-
-  # RTAudio is in a submodule, so we need git to update the submodule
-  find_package(Git QUIET)
-
-  # Update submodules as needed
-  if(GIT_FOUND AND EXISTS "${PROJECT_SOURCE_DIR}/.git")
-    option(GIT_SUBMODULE "Check submodules during build" ON)
-    if(GIT_SUBMODULE)
-      message(STATUS "Submodule update")
-      execute_process(COMMAND ${GIT_EXECUTABLE} submodule update --init --recursive
-        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-        RESULT_VARIABLE GIT_SUBMOD_RESULT)
-      if(NOT GIT_SUBMOD_RESULT EQUAL "0")
-        message(FATAL_ERROR "git submodule update --init failed with ${GIT_SUBMOD_RESULT}, please checkout submodules")
-      endif()
-    endif()
-  endif()
 
   # Ensure the rtaudio directory was checked out successfully
   if(NOT EXISTS "${PROJECT_SOURCE_DIR}/rtaudio/CMakeLists.txt")
@@ -52,16 +52,22 @@ if (USE_RTAUDIO)
   link_directories("${PROJECT_SOURCE_DIR}/rtaudio")
 
   # Build the udp_audio server
-  add_executable(udp_audio_server udp_audio_player.cc)
-  target_link_libraries(udp_audio_server rtaudio ${Extra_Libraries})
+  add_executable(udp_audio_player udp_audio_player.cc)
+  target_link_libraries(udp_audio_player rtaudio ${Extra_Libraries})
 
 endif()
+
+add_subdirectory(dcadec)
 
 # To find and use ffmpeg avcodec library
 find_path(AVCODEC_INCLUDE_DIR libavcodec/avcodec.h)
 find_library(AVCODEC_LIBRARY avcodec)
 find_library(AVUTIL_LIBRARY avutil)
 find_library(SWSCALE_LIBRARY swscale)
+include_directories(${AVCODEC_INCLUDE_DIR})
+find_path(DCADEC_INCLUDE_DIR libdcadec/common.h PATHS ${PROJECT_SOURCE_DIR}/dcadec)
+find_library(DCADEC_LIBRARY dcacec PATHS ${PROJECT_SOURCE_DIR}/dcadec)
+include_directories(${DCADEC_INCLUDE_DIR})
 
 # Find the boost libraries
 find_package(Boost REQUIRED COMPONENTS program_options)
@@ -74,3 +80,11 @@ if (SDL2_FOUND)
   add_executable(video_stream_player video_stream_player.cc)
   target_link_libraries(video_stream_player ${AVCODEC_LIBRARY} ${AVUTIL_LIBRARY} ${SWSCALE_LIBRARY} ${SDL2_LIBRARIES} ${Boost_LIBRARIES} ${Extra_Libraries})
 endif()
+
+find_package(ALSA)
+if (ALSA_FOUND)
+  include_directories(${ALSA_INCLUDE_DIRS})
+  add_executable(spdif_to_udp spdif_to_udp.cc)
+  link_directories(dcadec)
+  target_link_libraries(spdif_to_udp dcadec asound)
+endif ()

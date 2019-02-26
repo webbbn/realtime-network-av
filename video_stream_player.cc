@@ -32,9 +32,7 @@ class FFmpegStreamDestination {
 public:
   FFmpegStreamDestination(AVCodecID decoder) : m_sws_ctx(0) {
 
-    //av_register_all();
     avcodec_register_all();
-    //avformat_network_init();
 
     // Allocate the packet
     if (!(m_packet = av_packet_alloc())) {
