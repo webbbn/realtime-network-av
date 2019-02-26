@@ -57,15 +57,20 @@ if (USE_RTAUDIO)
 
 endif()
 
-find_package(SDL2)
-
 # To find and use ffmpeg avcodec library
 find_path(AVCODEC_INCLUDE_DIR libavcodec/avcodec.h)
 find_library(AVCODEC_LIBRARY avcodec)
 find_library(AVUTIL_LIBRARY avutil)
 find_library(SWSCALE_LIBRARY swscale)
 
+# Find the boost libraries
+find_package(Boost REQUIRED COMPONENTS program_options)
+include_directories(${Boost_INCLUDE_DIR})
+
+find_package(SDL2)
+
 if (SDL2_FOUND)
+  include_directories(${SDL2_INCLUDE_DIRS})
   add_executable(video_stream_player video_stream_player.cc)
-  target_link_libraries(video_stream_player ${AVCODEC_LIBRARY} ${AVUTIL_LIBRARY} ${SWSCALE_LIBRARY} ${SDL2_LIBRARIES} ${Extra_Libraries})
+  target_link_libraries(video_stream_player ${AVCODEC_LIBRARY} ${AVUTIL_LIBRARY} ${SWSCALE_LIBRARY} ${SDL2_LIBRARIES} ${Boost_LIBRARIES} ${Extra_Libraries})
 endif()

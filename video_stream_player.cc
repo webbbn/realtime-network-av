@@ -22,19 +22,19 @@ extern "C" {
 #include <libswscale/swscale.h>
 }
 
-#include <SDL2/SDL.h>
-#include <SDL2/SDL_thread.h>
+#include <SDL.h>
+#include <SDL_thread.h>
 
-#define PACKET_SIZE 32767
-#define MAX_FRAME_SIZE 250000
-#define BUFFER_SIZE 250000
-//#define USE_UDP
-#define PORT_NUM 2470
-#define IP_ADDRESS "192.168.1.95"
+#include <boost/program_options.hpp>
+
 
 class FFmpegStreamDestination {
 public:
   FFmpegStreamDestination(AVCodecID decoder) : m_sws_ctx(0) {
+
+    //av_register_all();
+    avcodec_register_all();
+    //avformat_network_init();
 
     // Allocate the packet
     if (!(m_packet = av_packet_alloc())) {
@@ -91,8 +91,7 @@ public:
       }
 
       // Trye to parse a frame out of the buffer
-      //printf("%d %d %d %d %d\n", data[0], data[1], data[2], data[3], data_size);
-      fflush(stdout);
+      //printf("%d %d %d %d %d\n", data[0], data[1], data[2], data[3], data_size); fflush(stdout);
 
       int consumed = av_parser_parse2(m_parser, m_pCodecCtx, &(m_packet->data), &(m_packet->size),
 				      data, data_size, AV_NOPTS_VALUE, AV_NOPTS_VALUE, 0);
@@ -194,6 +193,33 @@ protected:
 };
 
 int main(int argc, char* argv[]) {
+  namespace po=boost::program_options;
+  std::string hostname;
+  uint32_t port_num;
+  uint32_t packet_size;
+  bool use_udp;
+  po::options_description desc("Allowed options");
+  desc.add_options()
+    ("help", "produce help message")
+    ("hostname,h", po::value<std::string>(&hostname)->default_value("vtx1"),
+     "name or IP address of the video server")
+    ("port,p", po::value<uint32_t>(&port_num)->default_value(2470),
+     "port number of the video server (default 2470)")
+    ("packet_size,s", po::value<uint32_t>(&packet_size)->default_value(32767),
+     "the size of the packet buffer (the maximum size of a packet)")
+    ("use_udp,U", po::bool_switch(&use_udp),
+     "use the UDP protocol rather than TCP")
+    ;
+
+  po::variables_map vm;
+  po::store(po::command_line_parser(argc, argv).options(desc).run(), vm);
+  po::notify(vm);
+
+  if (vm.count("help")) {
+    std::cout << "Usage: options_description [options]\n";
+    std::cout << desc;
+    return 0;
+  }
 
 #ifdef _WIN32
   // Initialize the socket interface
@@ -203,41 +229,46 @@ int main(int argc, char* argv[]) {
 
   // Create a recieve socket
   struct sockaddr_in local;
-  local.sin_family = AF_INET;
-  local.sin_port = htons(PORT_NUM);
-#ifdef USE_UDP
-  local.sin_addr.s_addr = INADDR_ANY;
-  SOCKET socketC = socket(AF_INET, SOCK_DGRAM, 0);
-
-  // Bind to the UDPsocket
-  bind(socketC, (sockaddr*)&local, sizeof(local));
-#else
-#ifdef _WIN32
-  local.sin_addr.s_addr = inet_addr(IP_ADDRESS);
-  SOCKET socketC = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-
-  // Connect to the TCP socket
-  if (connect(socketC, (SOCKADDR *)&local, sizeof(local)) == SOCKET_ERROR) {
-    std::cerr << "Error connecting to the server" << std::endl;
-    exit(1);
-  }
-#else
-  struct hostent *server = gethostbyname(IP_ADDRESS);
-  if (server == NULL) {
-    std::cerr << "ERROR, no such host: " << IP_ADDRESS << std::endl;
-    exit(-1);
-  }
   bzero((char *)&local, sizeof(local));
   local.sin_family = AF_INET;
-  bcopy((char *)server->h_addr, (char *)&local.sin_addr.s_addr, server->h_length);
-  SOCKET socketC = socket(AF_INET, SOCK_STREAM, 0);
+  local.sin_port = htons(port_num);
+  SOCKET sock = socket(AF_INET, use_udp ? SOCK_DGRAM : SOCK_STREAM, use_udp ? 0 : IPPROTO_TCP);
+  if (sock < 0) {
+    std::cerr << "Error opening the socket" << std::endl;
+    exit(-1);
+  }
+  if (use_udp) {
+    local.sin_addr.s_addr = INADDR_ANY;
+    sock = 
+
+    // Bind to the UDPsocket
+    bind(sock, (sockaddr*)&local, sizeof(local));
+  } else {
+#ifdef _WIN32
+    local.sin_addr.s_addr = inet_addr(IP_ADDRESS);
 
   // Connect to the TCP socket
-  if (connect(socketC, (SOCKADDR *)&local, sizeof(local)) < 0) {
-    std::cerr << "Error connecting to the server" << std::endl;
-    exit(1);
+    if (connect(sock, (SOCKADDR *)&local, sizeof(local)) == SOCKET_ERROR) {
+      std::cerr << "Error connecting to the server "
+		<< hostname << ":" << port_num << std::endl;
+      exit(1);
+    }
+#else
+    struct hostent *server = gethostbyname(hostname.c_str());
+    if (server == NULL) {
+      std::cerr << "ERROR, no such host: " << hostname << std::endl;
+      exit(-1);
+    }
+    local.sin_family = AF_INET;
+    bcopy((char *)server->h_addr, (char *)&local.sin_addr.s_addr, server->h_length);
+
+    // Connect to the TCP socket
+    if (connect(sock, (SOCKADDR *)&local, sizeof(local)) < 0) {
+      std::cerr << "Error connecting to the server "
+		<< hostname << ":" << port_num << std::endl;
+      exit(1);
+    }
   }
-#endif
 #endif
 
   // Create the h264 decoder class.
@@ -249,14 +280,14 @@ int main(int argc, char* argv[]) {
     exit(1);
   }
 
-  unsigned char buffer[PACKET_SIZE];
+  uint8_t *buffer = new uint8_t[packet_size];
   bool done = false;
   while (!done) {
 
     // Try to read UDP packets
     struct sockaddr_in from;
     socklen_t from_len = sizeof(from);
-    int rec_len = recvfrom(socketC, reinterpret_cast<char*>(buffer), PACKET_SIZE, 0,
+    int rec_len = recvfrom(sock, reinterpret_cast<char*>(buffer), packet_size, 0,
 			   (sockaddr*)&from, &from_len);
     if (rec_len > 0) {
       //printf("%d %d %d %d %d\n", buffer[0], buffer[1], buffer[2], buffer[3], rec_len); fflush(stdout);
@@ -276,7 +307,11 @@ int main(int argc, char* argv[]) {
     }
   }
 
-  closesocket(socketC);
+  // Free the packet buffer
+  delete [] buffer;
+
+  // Close the socket
+  closesocket(sock);
 
   return 0;
 }
