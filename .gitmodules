@@ -1,6 +1,6 @@
 [submodule "rtaudio"]
 	path = rtaudio
-	url = git@github.com:webbbn/dcadec.git
+	url = https://github.com/thestk/rtaudio.git
 [submodule "dcadec"]
 	path = dcadec
 	url = git@github.com:webbbn/dcadec.git
