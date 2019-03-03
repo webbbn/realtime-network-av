@@ -245,7 +245,7 @@ int main(int argc, char* argv[]) {
 #ifdef _WIN32
     local.sin_addr.s_addr = inet_addr(IP_ADDRESS);
 
-  // Connect to the TCP socket
+    // Connect to the TCP socket
     if (connect(sock, (SOCKADDR *)&local, sizeof(local)) == SOCKET_ERROR) {
       std::cerr << "Error connecting to the server "
 		<< hostname << ":" << port_num << std::endl;
