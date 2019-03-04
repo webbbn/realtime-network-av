@@ -32,8 +32,6 @@ class FFmpegStreamDestination {
 public:
   FFmpegStreamDestination(AVCodecID decoder) : m_sws_ctx(0) {
 
-    avcodec_register_all();
-
     // Allocate the packet
     if (!(m_packet = av_packet_alloc())) {
       std::cerr << "Error allocating a packet" << std::endl;
@@ -227,7 +225,7 @@ int main(int argc, char* argv[]) {
 
   // Create a recieve socket
   struct sockaddr_in local;
-  bzero((char *)&local, sizeof(local));
+  memset((char *)&local, 0, sizeof(local));
   local.sin_family = AF_INET;
   local.sin_port = htons(port_num);
   SOCKET sock = socket(AF_INET, use_udp ? SOCK_DGRAM : SOCK_STREAM, use_udp ? 0 : IPPROTO_TCP);
@@ -242,22 +240,27 @@ int main(int argc, char* argv[]) {
     // Bind to the UDPsocket
     bind(sock, (sockaddr*)&local, sizeof(local));
   } else {
-#ifdef _WIN32
-    local.sin_addr.s_addr = inet_addr(IP_ADDRESS);
-
-    // Connect to the TCP socket
-    if (connect(sock, (SOCKADDR *)&local, sizeof(local)) == SOCKET_ERROR) {
-      std::cerr << "Error connecting to the server "
-		<< hostname << ":" << port_num << std::endl;
-      exit(1);
-    }
-#else
     struct hostent *server = gethostbyname(hostname.c_str());
     if (server == NULL) {
       std::cerr << "ERROR, no such host: " << hostname << std::endl;
       exit(-1);
     }
     local.sin_family = AF_INET;
+#ifdef _WIN32
+    struct in_addr **addr_list = (struct in_addr **)server->h_addr_list;
+    size_t a = 0;
+    for(a = 0; addr_list[a] != NULL; a++) {
+      local.sin_addr.s_addr = inet_addr(inet_ntoa(*addr_list[a]));
+      if (connect(sock, (SOCKADDR *)&local, sizeof(local)) != SOCKET_ERROR) {
+	break;
+      }
+    }
+    if (addr_list[a] == NULL) {
+      std::cerr << "Error connecting to the server "
+		<< hostname << ":" << port_num << "  " << std::endl;
+      exit(1);
+    }
+#else
     bcopy((char *)server->h_addr, (char *)&local.sin_addr.s_addr, server->h_length);
 
     // Connect to the TCP socket
@@ -266,8 +269,8 @@ int main(int argc, char* argv[]) {
 		<< hostname << ":" << port_num << std::endl;
       exit(1);
     }
-  }
 #endif
+  }
 
   // Create the h264 decoder class.
   FFmpegStreamDestination dec(AV_CODEC_ID_H264);
