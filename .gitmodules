@@ -4,3 +4,6 @@
 [submodule "dcadec"]
 	path = dcadec
 	url = https://github.com/webbbn/dcadec.git
+[submodule "mavlink"]
+	path = mavlink
+	url = https://github.com/mavlink/c_library_v2.git
