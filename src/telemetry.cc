@@ -1,11 +1,12 @@
 
 #include <iostream>
+#include <thread>
 
 #include <mavlink.h>
 
 #include "telemetry.hh"
 
-Telemetry::Telemetry(boost::asio::io_context &io_context) :
+Telemetry::Telemetry(io_context &io_context) :
   m_sock(io_context, boost::asio::ip::udp::endpoint(boost::asio::ip::address_v4::any(), 14550)) {
   m_sock.set_option(boost::asio::socket_base::broadcast(true));
   std::thread([this]() { this->reader_thread(); }).detach();

@@ -57,7 +57,11 @@ int main(int argc, char* argv[]) {
   bool use_url = (url.length() > 0);
 
   // Create the boost asio IO context for the network interfaces.
+#if BOOST_VERSION < 106600
+  boost::asio::io_service io_context;
+#else
   boost::asio::io_context io_context;
+#endif
 
   // Create the address resolver
   ip::tcp::resolver tcp_resolver(io_context);
@@ -77,9 +81,6 @@ int main(int argc, char* argv[]) {
   std::shared_ptr<FFMpegDecoder> dec;
   if (use_url) {
 
-    // Register the network interface
-    avformat_network_init();
-
     // Create the decoder class
     dec.reset(new FFMpegDecoder(url, draw_cb));
 
@@ -98,7 +99,11 @@ int main(int argc, char* argv[]) {
     } else {
 
       ip::tcp::socket sock(io_context);
+#if BOOST_VERSION < 106600
+      boost::asio::connect(sock, tcp_resolver.resolve({hostname, port}));
+#else
       boost::asio::connect(sock, tcp_resolver.resolve(hostname, port));
+#endif
 
       bool done = false;
       while (!done) {

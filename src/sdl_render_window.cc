@@ -77,6 +77,7 @@ void SDLRenderWindow::update(uint32_t width, uint32_t height, uint8_t *y_plane, 
 
     // Scale the renderer based on a 1280x720 screen size
     float scale = static_cast<float>(width) / 1280.0;
+    std::cerr << "width: " << width << "  scale: " << scale << std::endl;
     SDL_RenderSetScale(m_renderer, scale, scale);
   }
 

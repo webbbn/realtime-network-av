@@ -5,6 +5,8 @@
 FFMpegDecoder::FFMpegDecoder(AVCodecID decoder, DrawCallback cb) :
    m_parser(0), m_format_ctx(0), m_sws_ctx(0), m_draw(cb) {
 
+  av_register_all();
+
   // Find the decoder
   if (!(m_codec = avcodec_find_decoder(decoder))) {
     std::cerr << "Error finding the decoder" << std::endl;
@@ -30,6 +32,11 @@ FFMpegDecoder::FFMpegDecoder(AVCodecID decoder, DrawCallback cb) :
 // Initialize a class for decoding from a URL path
 FFMpegDecoder::FFMpegDecoder(const std::string &url, DrawCallback cb) :
   m_format_ctx(0), m_sws_ctx(0), m_draw(cb) {
+
+  av_register_all();
+
+  // Register the network interface
+  avformat_network_init();
 
   // Open the input stream.
   if (avformat_open_input(&m_format_ctx, url.c_str(), NULL, NULL) != 0) {

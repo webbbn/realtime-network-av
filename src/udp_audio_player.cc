@@ -1,7 +1,8 @@
 #include <sys/types.h>
-#include <winsock2.h>
 #include <stdio.h>
 #include <iostream>
+
+#include <boost/asio.hpp>
 
 #include <RtAudio.h>
 
@@ -15,6 +16,7 @@ uint32_t obufidx = 0;
 
 int output(void *out_buffer, void * /*in_buffer*/, unsigned int nframes,
 	   double /*stream_time*/, RtAudioStreamStatus /*status*/, void *data) {
+#if 0
   SOCKET &socketC = *((SOCKET*)data);
   int buffer_bytes = nframes * NCHANNELS * sizeof(int16_t);
 
@@ -23,6 +25,7 @@ int output(void *out_buffer, void * /*in_buffer*/, unsigned int nframes,
   int from_len = sizeof(from);
   int rec_len = recvfrom(socketC, (char*)out_buffer, buffer_bytes, 0,
 			 (sockaddr*)&from, &from_len);
+#endif
 
   return 0;
 }
@@ -36,6 +39,7 @@ int main(int argc, char* argv[]) {
     exit(0);
   }
 
+#if 0
   // Initialize the socket interface
   WSADATA wsaData;
   WSAStartup(MAKEWORD(2, 2), &wsaData);
@@ -59,6 +63,7 @@ int main(int argc, char* argv[]) {
 
   // Bind to the socket
   bind(socketC, (sockaddr*)&local, sizeof(local));
+#endif
 
   // Open the output audio device and start it streaming
   RtAudio::StreamParameters oParams;
@@ -66,6 +71,7 @@ int main(int argc, char* argv[]) {
   oParams.nChannels = NCHANNELS;
   oParams.firstChannel = 0;
   unsigned int bufferFrames = BUFFER_FRAMES;
+#if 0
   try {
     dac.openStream(&oParams, NULL, FORMAT, SAMPLE_RATE, &bufferFrames, &output, (void *)&socketC);
     dac.startStream();
@@ -73,14 +79,16 @@ int main(int argc, char* argv[]) {
   catch (RtAudioError& e) {
     std::cout << '\n' << e.getMessage() << '\n' << std::endl;
   }
-
   while (1) {
     Sleep(10);
   }
+#endif
 
   dac.closeStream();
 
+#if 0
   closesocket(socketC);
+#endif
 
   return 0;
 }

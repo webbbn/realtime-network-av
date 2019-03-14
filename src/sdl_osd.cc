@@ -159,9 +159,9 @@ void SDLOSD::draw() {
     float home_direction = 0;
     m_telem->get_value("home_direction", home_direction);
     m_home_arrow->render((canonical_screen_width - m_home_arrow->width()) / 2, 10, 0, home_direction);
-    SDL_RenderPresent(m_renderer);
   }
 
+/*
   // Render the north arrow
   if (m_north_arrow) {
     float north_direction = 0;
@@ -170,7 +170,5 @@ void SDLOSD::draw() {
 			  canonical_screen_height - m_north_arrow->width() - 10,
 			  0, north_direction);
   }
-
-  // Draw the renderer
-  SDL_RenderPresent(m_renderer);
+*/
 }

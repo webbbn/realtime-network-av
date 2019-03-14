@@ -6,9 +6,15 @@
 
 #include <boost/asio.hpp>
 
-struct Telemetry {
 
-  Telemetry(boost::asio::io_context &io_context);
+struct Telemetry {
+#if BOOST_VERSION < 106600
+  typedef boost::asio::io_service io_context;
+#else
+  typedef boost::asio::io_context io_context;
+#endif
+
+  Telemetry(io_context &io_context);
 
   bool get_value(const std::string &name, float &value);
 

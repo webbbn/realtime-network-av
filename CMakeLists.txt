@@ -8,6 +8,8 @@ option(USE_OMX "Build programs that use the OMX library on Raspberry Pi" OFF)
 
 if (WIN32)
   set(Extra_Libraries "ws2_32")
+else()
+  set(Extra_Libraries "pthread")
 endif()
 
 # We have submodule, so we need git to update the submodule
@@ -53,9 +55,13 @@ add_subdirectory(rtaudio)
 include_directories("${PROJECT_SOURCE_DIR}/rtaudio")
 link_directories("${PROJECT_SOURCE_DIR}/rtaudio")
 
+# Find the boost libraries
+find_package(Boost REQUIRED COMPONENTS program_options system)
+include_directories(${Boost_INCLUDE_DIR})
+
 # Build the udp_audio server
 add_executable(udp_audio_player src/udp_audio_player.cc)
-target_link_libraries(udp_audio_player rtaudio ${Extra_Libraries})
+target_link_libraries(udp_audio_player rtaudio ${Extra_Libraries} ${Boost_LIBRARIES})
 install(TARGETS udp_audio_player DESTINATION bin)
 
 add_subdirectory(dcadec)
@@ -71,10 +77,6 @@ find_path(DCADEC_INCLUDE_DIR libdcadec/common.h PATHS ${PROJECT_SOURCE_DIR}/dcad
 find_library(DCADEC_LIBRARY dcacec PATHS ${PROJECT_SOURCE_DIR}/dcadec)
 include_directories(${DCADEC_INCLUDE_DIR})
 
-# Find the boost libraries
-find_package(Boost REQUIRED COMPONENTS program_options)
-include_directories(${Boost_INCLUDE_DIR})
-
 find_package(SDL2)
 find_library(SDL2_TTF_LIBRARY SDL2_ttf)
 find_library(SDL2_IMAGE_LIBRARY SDL2_image)
@@ -82,24 +84,24 @@ find_library(SDL2_IMAGE_LIBRARY SDL2_image)
 # Add the mavlink directory to the include path
 include_directories(${PROJECT_SOURCE_DIR}/mavlink/common)
 
-if (SDL2_FOUND)
-  include_directories(${SDL2_INCLUDE_DIRS})
-  add_executable(video_stream_player
-    src/video_stream_player.cc
-    src/telemetry.cc
-    src/texture.cc
-    src/ffmpeg_decoder.cc
-    src/sdl_osd.cc
-    src/sdl_render_window.cc)
-  target_link_libraries(video_stream_player ${AVCODEC_LIBRARY} ${AVFORMAT_LIBRARY} ${AVUTIL_LIBRARY} ${SWSCALE_LIBRARY} ${SDL2_LIBRARIES} ${SDL2_TTF_LIBRARY} ${SDL2_IMAGE_LIBRARY} ${Boost_LIBRARIES} ${Extra_Libraries})
-  install(TARGETS video_stream_player DESTINATION bin)
-endif()
+include_directories(${SDL2_INCLUDE_DIRS})
+add_executable(video_stream_player
+  src/video_stream_player.cc
+  src/telemetry.cc
+  src/texture.cc
+  src/ffmpeg_decoder.cc
+  src/sdl_osd.cc
+  src/sdl_render_window.cc)
+target_link_libraries(video_stream_player ${AVCODEC_LIBRARY} ${AVFORMAT_LIBRARY} ${AVUTIL_LIBRARY} ${SWSCALE_LIBRARY} ${SDL2_LIBRARIES} ${SDL2_TTF_LIBRARY} ${SDL2_IMAGE_LIBRARY} ${Boost_LIBRARIES} ${Extra_Libraries})
+install(TARGETS video_stream_player DESTINATION bin)
+add_executable(vsp src/vsp.cc)
+target_link_libraries(vsp ${AVCODEC_LIBRARY} ${AVFORMAT_LIBRARY} ${AVUTIL_LIBRARY} ${SWSCALE_LIBRARY} ${SDL2_LIBRARIES} ${SDL2_TTF_LIBRARY} ${SDL2_IMAGE_LIBRARY} ${Boost_LIBRARIES} ${Extra_Libraries})
 
 find_package(ALSA)
 if (ALSA_FOUND)
   include_directories(${ALSA_INCLUDE_DIRS})
   add_executable(spdif_to_udp src/spdif_to_udp.cc)
   link_directories(dcadec)
-  target_link_libraries(spdif_to_udp dcadec asound)
+  target_link_libraries(spdif_to_udp dcadec asound ${Boost_LIBRARIES})
   install(TARGETS spdif_to_udp DESTINATION bin)
 endif ()
