@@ -17,7 +17,7 @@ find_package(Git QUIET)
 
 # Update submodules as needed
 if(GIT_FOUND AND EXISTS "${PROJECT_SOURCE_DIR}/.git")
-  option(GIT_SUBMODULE "Check submodules during build" ON)
+  option(GIT_SUBMODULE "Check submodules during build" OFF)
   if(GIT_SUBMODULE)
     message(STATUS "Submodule update")
     execute_process(COMMAND ${GIT_EXECUTABLE} submodule update --init --recursive

@@ -1,10 +1,16 @@
 # realtime_network_av
+
 A collection of utilities for real-time encoding and decoding audio and video streams.
+
+# Initialize submodules
+
+`git submodule update --init --recursive`
 
 # Compile SDL on Raspberry Pi that displays on the framebuffer
 
 *Downloaded from:* https://choccyhobnob.com/sdl2-2-0-8-on-raspberry-pi/
 
+~~~
 sudo apt-get remove libsdl2-dev
 sudo apt-get autoremove -y
 sudo apt-get install libfontconfig-dev qt5-default automake mercurial libtool libfreeimage-dev libopenal-dev libpango1.0-dev libsndfile-dev libudev-dev libtiff5-dev libwebp-dev libasound2-dev libaudio-dev libxrandr-dev libxcursor-dev libxi-dev libxinerama-dev libxss-dev libesd0-dev freeglut3-dev libmodplug-dev libsmpeg-dev libjpeg-dev
@@ -34,3 +40,4 @@ for D in SDL2_image-2.0.2 SDL2_mixer-2.0.2 SDL2_net-2.0.1 SDL2_ttf-2.0.14; do
   make -j 4 install
   cd ..
 done
+~~~
