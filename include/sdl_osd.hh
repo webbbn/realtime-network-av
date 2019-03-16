@@ -25,7 +25,7 @@ private:
 		SDL_Rect &text_rect);
 
   bool add_text(const std::string &text, const std::string &units,
-		uint8_t col, uint8_t row,
+		uint8_t col, int8_t row,
 		uint8_t r = 255, uint8_t g = 255, uint8_t b = 255, uint8_t a = 255,
 		uint8_t rb = 0, uint8_t gb = 0, uint8_t bb = 0, uint8_t ab = 0);
 
@@ -35,6 +35,8 @@ private:
 		     uint8_t rb = 0, uint8_t gb = 0, uint8_t bb = 0, uint8_t ab = 0);
 
   uint8_t m_text_border; // The width of the border around text in pixels
+  uint8_t m_num_lines;
+  uint32_t m_scaled_screen_height;
   SDL_Renderer *m_renderer;
   Texture *m_home_arrow;
   Texture *m_north_arrow;

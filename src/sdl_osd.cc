@@ -6,9 +6,9 @@
 #include "sdl_osd.hh"
 
 // Draw everything based on a screen size of 720p and scale it to the actual screen size.
-static const uint16_t canonical_screen_width = 1280;
-static const uint16_t canonical_screen_height = 720;
+static const uint16_t g_canonical_screen_width = 1280;
 static const uint8_t g_font_size = 40;
+static const uint8_t g_line_size = static_cast<uint8_t>(g_font_size * 1.25);
 static const uint8_t g_text_border_width = 2;
 static const char *g_mode_strings[] = {
 				       "Manual",
@@ -42,7 +42,7 @@ SDLOSD::SDLOSD(const std::string &font_file, const std::string &home_dir_icon,
   m_telem(telem) {
 
   // We want the same text border width no matter what the display resolution
-  m_text_border = static_cast<uint8_t>(ceil(g_text_border_width * canonical_screen_width /
+  m_text_border = static_cast<uint8_t>(ceil(g_text_border_width * g_canonical_screen_width /
 					    static_cast<float>(display_width)));
 
   // Load the font and use the same fort for the text border.
@@ -75,6 +75,14 @@ SDLOSD::SDLOSD(const std::string &font_file, const std::string &home_dir_icon,
     delete m_north_arrow;
     m_north_arrow = 0;
   }
+
+  // Scale the renderer based on a 1280x720 screen size
+  float scale = static_cast<float>(display_width) / g_canonical_screen_width;
+  SDL_RenderSetScale(m_renderer, scale, scale);
+  m_num_lines = static_cast<uint8_t>((display_height / scale) / g_line_size);
+  m_scaled_screen_height = static_cast<uint32_t>(display_height / scale);
+  std::cerr << "width: " << display_width << "  height: " << display_height
+	    << "  scale: " << scale << "  num_lines: " << static_cast<int>(m_num_lines) << std::endl;
 }
 
 bool SDLOSD::add_text(const std::string &text, TTF_Font *font, TTF_Font *bg_font,
@@ -115,11 +123,11 @@ bool SDLOSD::add_text(const std::string &text, TTF_Font *font, TTF_Font *bg_font
 }
 
 bool SDLOSD::add_text(const std::string &text, const std::string &units,
-		      uint8_t col, uint8_t row,
+		      uint8_t col, int8_t row,
 		      uint8_t r, uint8_t g, uint8_t b, uint8_t a,
 		      uint8_t rb, uint8_t gb, uint8_t bb, uint8_t ab) {
   int x = col * g_font_size + g_font_size;
-  int y = row * (g_font_size * 1.25) + g_font_size;
+  int y = ((row < 0) ? m_num_lines + row - 1 : row) * g_line_size + g_font_size;
   SDL_Color color;
   color.r = r;
   color.g = g;
@@ -183,9 +191,9 @@ void SDLOSD::update() {
   // Draw the armed/disarmed icon.
   float armed_val = 0;
   if (m_telem->get_value("armed", armed_val) && (armed_val > 0.0)) {
-    add_text("Armed", "", 0, 10, 255, 128, 128);
+    add_text("Armed", "", 0, -2, 255, 128, 128);
   } else {
-    add_text("Disarmed", "", 0, 10, 0, 255, 0);
+    add_text("Disarmed", "", 0, -2, 0, 255, 0);
   }
 
   // Draw the mode text.
@@ -194,7 +202,7 @@ void SDLOSD::update() {
     mode_val = 0;
   }
   uint8_t mode = static_cast<uint8_t>(mode_val);
-  add_text(g_mode_strings[mode], "", 0, 11);
+  add_text(g_mode_strings[mode], "", 0, -1);
 
   // Draw the GPS location
   float latitude;
@@ -206,19 +214,19 @@ void SDLOSD::update() {
   float min = (deg - static_cast<float>(deg_int)) * 60.0;
   int32_t min_int = static_cast<int32_t>(min);
   float sec = (min - static_cast<float>(min_int)) * 60.0;
-  add_text((deg < 0) ? "S" : "N", "", 5, 12);
-  add_text(str(boost::format("%2d") % abs(deg_int)), "o", 6, 12);
-  add_text(str(boost::format("%2d") % abs(min_int)), "'", 8, 12);
-  add_text(str(boost::format("%5.2f") % abs(sec)), "\"", 10, 12);
+  add_text((deg < 0) ? "S" : "N", "", 5, -1);
+  add_text(str(boost::format("%2d") % abs(deg_int)), "o", 6, -1);
+  add_text(str(boost::format("%2d") % abs(min_int)), "'", 8, -1);
+  add_text(str(boost::format("%5.2f") % abs(sec)), "\"", 10, -1);
   deg = std::max(std::min(longitude, 180.0F), -180.0F);
   deg_int = static_cast<int32_t>(deg);
   min = (deg - static_cast<float>(deg_int)) * 60.0;
   min_int = static_cast<int32_t>(min);
   sec = (min - static_cast<float>(min_int)) * 60.0;
-  add_text((deg < 0) ? "W" : "E", "", 16, 12);
-  add_text(str(boost::format("%2d") % abs(deg_int)), "o", 17, 12);
-  add_text(str(boost::format("%2d") % abs(min_int)), "'", 20, 12);
-  add_text(str(boost::format("%5.2f") % abs(sec)), "\"", 22, 12);
+  add_text((deg < 0) ? "W" : "E", "", 16, -1);
+  add_text(str(boost::format("%2d") % abs(deg_int)), "o", 17, -1);
+  add_text(str(boost::format("%2d") % abs(min_int)), "'", 20, -1);
+  add_text(str(boost::format("%5.2f") % abs(sec)), "\"", 22, -1);
 }
 
 void SDLOSD::draw() {
@@ -235,15 +243,16 @@ void SDLOSD::draw() {
   if (m_home_arrow) {
     float home_direction = 0;
     m_telem->get_value("home_direction", home_direction);
-    m_home_arrow->render((canonical_screen_width - m_home_arrow->width()) / 2, 10, 0, home_direction);
+    m_home_arrow->render((g_canonical_screen_width - m_home_arrow->width()) / 2, 10, 0,
+			 home_direction);
   }
 
   // Render the north arrow
   if (m_north_arrow) {
     float north_direction = 0;
     m_telem->get_value("heading", north_direction);
-    m_north_arrow->render((canonical_screen_width - m_north_arrow->width()) / 2,
-			  canonical_screen_height - m_north_arrow->width() - 40,
+    m_north_arrow->render((g_canonical_screen_width - m_north_arrow->width()) / 2,
+			  m_scaled_screen_height - m_north_arrow->height() - 40,
 			  0, 360.0 - north_direction);
   }
 }

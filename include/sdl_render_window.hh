@@ -32,6 +32,8 @@ private:
   SDL_Window *m_screen;
   SDL_Renderer *m_renderer;
   SDL_Texture *m_texture;
+  uint32_t m_screen_width;
+  uint32_t m_screen_height;
 };
 
 #endif /* RTNAV_SDL_RENDER_WINDOW_HH */

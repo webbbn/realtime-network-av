@@ -25,6 +25,12 @@ SDLRenderWindow::SDLRenderWindow(std::shared_ptr<Telemetry> telem,
     SDL_Quit();
     exit(1);
   }
+
+  // Get the screen size
+  SDL_DisplayMode DM;
+  SDL_GetCurrentDisplayMode(0, &DM);
+  m_screen_width = DM.w;
+  m_screen_height = DM.h;
 }
 
 SDLRenderWindow::~SDLRenderWindow() {
@@ -54,7 +60,8 @@ bool SDLRenderWindow::check_for_quit() {
   return false;
 }
 
-void SDLRenderWindow::update(uint32_t width, uint32_t height, uint8_t *y_plane, uint8_t *u_plane, uint8_t *v_plane) {
+void SDLRenderWindow::update(uint32_t width, uint32_t height, uint8_t *y_plane, uint8_t *u_plane,
+			     uint8_t *v_plane) {
 
   // Create the playback window.
   if (!m_screen) {
@@ -74,11 +81,6 @@ void SDLRenderWindow::update(uint32_t width, uint32_t height, uint8_t *y_plane, 
       std::cerr << "Cound not create the SDL renderer" << std::endl;
       return;
     }
-
-    // Scale the renderer based on a 1280x720 screen size
-    float scale = static_cast<float>(width) / 1280.0;
-    std::cerr << "width: " << width << "  scale: " << scale << std::endl;
-    SDL_RenderSetScale(m_renderer, scale, scale);
   }
 
   // Allocate a place to put our YUV image on that screen
@@ -96,7 +98,7 @@ void SDLRenderWindow::update(uint32_t width, uint32_t height, uint8_t *y_plane, 
   // Create the OSD class
   if (!m_osd) {
     m_osd.reset(new SDLOSD(m_font_file, m_home_dir_icon, m_north_arrow_icon, m_renderer,
-			   m_telem, width, height));
+			   m_telem, m_screen_width, m_screen_height));
   }
 
   // Update the texture
