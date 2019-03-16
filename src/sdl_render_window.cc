@@ -29,8 +29,14 @@ SDLRenderWindow::SDLRenderWindow(std::shared_ptr<Telemetry> telem,
   // Get the screen size
   SDL_DisplayMode DM;
   SDL_GetCurrentDisplayMode(0, &DM);
-  m_screen_width = DM.w;
-  m_screen_height = DM.h;
+  // This is a hack to support windowed mode
+  if (DM.w <= 720) {
+    m_screen_width = DM.w;
+    m_screen_height = DM.h;
+  } else {
+    m_screen_width = 0;
+    m_screen_height = 0;
+  }
 }
 
 SDLRenderWindow::~SDLRenderWindow() {
@@ -80,6 +86,10 @@ void SDLRenderWindow::update(uint32_t width, uint32_t height, uint8_t *y_plane, 
       SDL_DestroyWindow(m_screen);
       std::cerr << "Cound not create the SDL renderer" << std::endl;
       return;
+    }
+    if (m_screen_width == 0) {
+      m_screen_width = width;
+      m_screen_height = height;
     }
   }
 
