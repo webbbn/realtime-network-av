@@ -10,6 +10,8 @@ Telemetry::Telemetry(io_context &io_context) :
   m_sock(io_context, boost::asio::ip::udp::endpoint(boost::asio::ip::address_v4::any(), 14550)) {
   m_sock.set_option(boost::asio::socket_base::broadcast(true));
   std::thread([this]() { this->reader_thread(); }).detach();
+  //mavlink_message_t msg;
+  //mavlink_msg_request_data_stream_pack(99, 99, &msg, 1, 0, MAV_DATA_STREAM_EXTENDED_STATUS, 5, 1)
 }
 
 bool Telemetry::get_value(const std::string &name, float &value) {
@@ -55,12 +57,12 @@ void Telemetry::reader_thread() {
 	case MAVLINK_MSG_ID_GLOBAL_POSITION_INT:
 	  mavlink_global_position_int_t pos;
 	  mavlink_msg_global_position_int_decode(&msg, &pos);
-	  set_value("latitude", pos.lat);
-	  set_value("longitude", pos.lon);
+	  set_value("latitude", static_cast<float>(pos.lat) * 1e-7);
+	  set_value("longitude", static_cast<float>(pos.lon) * 1e-7);
 	  set_value("altitude", static_cast<float>(pos.alt) / 1000.0);
 	  set_value("relative_altitude", static_cast<float>(pos.relative_alt) / 1000.0);
 	  set_value("speed", sqrt(pos.vx * pos.vx + pos.vy * pos.vy + pos.vz * pos.vz) / 100.0);
-	  set_value("heading", static_cast<float>(pos.hdg) / 10.0);
+	  set_value("heading", static_cast<float>(pos.hdg) / 100.0);
 	  break;
 	case MAVLINK_MSG_ID_ATTITUDE:
 	  mavlink_attitude_t att;
@@ -86,7 +88,10 @@ void Telemetry::reader_thread() {
 	  //std::cerr << "Vibration " << std::endl;
 	  break;
 	case MAVLINK_MSG_ID_HEARTBEAT:
-	  //std::cerr << "Heartbeat " << std::endl;
+	  mavlink_heartbeat_t hb;
+	  mavlink_msg_heartbeat_decode(&msg, &hb);
+	  set_value("armed", (hb.base_mode & 0x80) ? 1.0 : 0.0);
+	  set_value("mode", static_cast<float>(hb.custom_mode));
 	  break;
 	case MAVLINK_MSG_ID_VFR_HUD:
 	  //std::cerr << "VFR HUD " << std::endl;

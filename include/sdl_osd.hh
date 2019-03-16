@@ -29,8 +29,10 @@ private:
 		uint8_t r = 255, uint8_t g = 255, uint8_t b = 255, uint8_t a = 255,
 		uint8_t rb = 0, uint8_t gb = 0, uint8_t bb = 0, uint8_t ab = 0);
 
-  void add_telemetry(const std::string &key, const std::string &format, const std::string &units,
-		     uint32_t x, uint32_t y);
+  void add_telemetry(const std::string &key, const std::string &format,
+		     const std::string &units, uint32_t x, uint32_t y,
+		     uint8_t r = 255, uint8_t g = 255, uint8_t b = 255, uint8_t a = 255,
+		     uint8_t rb = 0, uint8_t gb = 0, uint8_t bb = 0, uint8_t ab = 0);
 
   uint8_t m_text_border; // The width of the border around text in pixels
   SDL_Renderer *m_renderer;

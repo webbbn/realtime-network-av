@@ -94,8 +94,6 @@ add_executable(video_stream_player
   src/sdl_render_window.cc)
 target_link_libraries(video_stream_player ${AVCODEC_LIBRARY} ${AVFORMAT_LIBRARY} ${AVUTIL_LIBRARY} ${SWSCALE_LIBRARY} ${SDL2_LIBRARIES} ${SDL2_TTF_LIBRARY} ${SDL2_IMAGE_LIBRARY} ${Boost_LIBRARIES} ${Extra_Libraries})
 install(TARGETS video_stream_player DESTINATION bin)
-add_executable(vsp src/vsp.cc)
-target_link_libraries(vsp ${AVCODEC_LIBRARY} ${AVFORMAT_LIBRARY} ${AVUTIL_LIBRARY} ${SWSCALE_LIBRARY} ${SDL2_LIBRARIES} ${SDL2_TTF_LIBRARY} ${SDL2_IMAGE_LIBRARY} ${Boost_LIBRARIES} ${Extra_Libraries})
 
 find_package(ALSA)
 if (ALSA_FOUND)

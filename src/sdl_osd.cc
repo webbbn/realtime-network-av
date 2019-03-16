@@ -10,6 +10,29 @@ static const uint16_t canonical_screen_width = 1280;
 static const uint16_t canonical_screen_height = 720;
 static const uint8_t g_font_size = 40;
 static const uint8_t g_text_border_width = 2;
+static const char *g_mode_strings[] = {
+				       "Manual",
+				       "Circle",
+				       "Stabilize",
+				       "Training",
+				       "Acro",
+				       "FBWA",
+				       "FBWB",
+				       "Cruise",
+				       "Autotune",
+				       "Auto",
+				       "Rtl",
+				       "Loiter",
+				       "Land",
+				       "Guided",
+				       "Initialising",
+				       "QStabilize",
+				       "QHover",
+				       "QLoiter",
+				       "QLand",
+				       "QRTL",
+				       "QAutotune"
+};
 
 SDLOSD::SDLOSD(const std::string &font_file, const std::string &home_dir_icon,
 	       const std::string &north_arrow, SDL_Renderer *renderer,
@@ -94,7 +117,7 @@ bool SDLOSD::add_text(const std::string &text, TTF_Font *font, TTF_Font *bg_font
 bool SDLOSD::add_text(const std::string &text, const std::string &units,
 		      uint8_t col, uint8_t row,
 		      uint8_t r, uint8_t g, uint8_t b, uint8_t a,
-		      uint8_t rb, uint8_t gb, uint8_t bb, uint8_t ab ) {
+		      uint8_t rb, uint8_t gb, uint8_t bb, uint8_t ab) {
   int x = col * g_font_size + g_font_size;
   int y = row * (g_font_size * 1.25) + g_font_size;
   SDL_Color color;
@@ -121,8 +144,10 @@ bool SDLOSD::add_text(const std::string &text, const std::string &units,
 }
 
 // Get a value from the telmetry class and add it to the display
-void SDLOSD::add_telemetry(const std::string &key, const std::string &format, const std::string &units,
-			   uint32_t x, uint32_t y) {
+void SDLOSD::add_telemetry(const std::string &key, const std::string &format,
+			   const std::string &units, uint32_t x, uint32_t y,
+			   uint8_t r, uint8_t g, uint8_t b, uint8_t a,
+			   uint8_t rb, uint8_t gb, uint8_t bb, uint8_t ab) {
   float value = 0;
   if (!m_telem->get_value(key, value)) {
     value = 0;
@@ -133,15 +158,67 @@ void SDLOSD::add_telemetry(const std::string &key, const std::string &format, co
 void SDLOSD::update() {
 
   // Draw the battery status text
-  add_telemetry("voltage_battery", "%4.1f", "V", 0, 0);
+  float remain = 0;
+  bool low_bat = true;
+  if (m_telem->get_value("battery_remaining", remain)) {
+    low_bat = (remain < 0.15);
+  }
+  if (low_bat) {
+    add_telemetry("voltage_battery", "%4.1f", "V", 0, 0,
+		  255, 128, 128, 255, 128, 128);
+    add_telemetry("battery_remaining", "%4.1f", "%", 0, 2,
+		  255, 128, 128, 255, 128, 128);
+  } else {
+    add_telemetry("voltage_battery", "%4.1f", "V", 0, 0);
+    add_telemetry("battery_remaining", "%4.1f", "%", 0, 2);
+  }
   add_telemetry("current_battery", "%4.1f", "A", 0, 1);
-  add_telemetry("battery_remaining", "%4.1f", "%", 0, 2);
 
   // Draw the distance/speed text
   add_telemetry("distance", "%6.2f", "km", 25, 0);
   add_telemetry("speed", "%6.2f", "km/h", 25, 1);
   add_telemetry("altitude", "%6.2f", "m", 25, 2);
   add_telemetry("relative_altitude", "%6.2f", "m", 25, 3);
+
+  // Draw the armed/disarmed icon.
+  float armed_val = 0;
+  if (m_telem->get_value("armed", armed_val) && (armed_val > 0.0)) {
+    add_text("Armed", "", 0, 10, 255, 128, 128);
+  } else {
+    add_text("Disarmed", "", 0, 10, 0, 255, 0);
+  }
+
+  // Draw the mode text.
+  float mode_val = 0;
+  if (!m_telem->get_value("mode", mode_val)) {
+    mode_val = 0;
+  }
+  uint8_t mode = static_cast<uint8_t>(mode_val);
+  add_text(g_mode_strings[mode], "", 0, 11);
+
+  // Draw the GPS location
+  float latitude;
+  float longitude;
+  m_telem->get_value("latitude", latitude);
+  m_telem->get_value("longitude", longitude);
+  float deg = std::max(std::min(latitude, 90.0F), -90.0F);
+  int32_t deg_int = static_cast<int32_t>(deg);
+  float min = (deg - static_cast<float>(deg_int)) * 60.0;
+  int32_t min_int = static_cast<int32_t>(min);
+  float sec = (min - static_cast<float>(min_int)) * 60.0;
+  add_text((deg < 0) ? "S" : "N", "", 5, 12);
+  add_text(str(boost::format("%2d") % abs(deg_int)), "o", 6, 12);
+  add_text(str(boost::format("%2d") % abs(min_int)), "'", 8, 12);
+  add_text(str(boost::format("%5.2f") % abs(sec)), "\"", 10, 12);
+  deg = std::max(std::min(longitude, 180.0F), -180.0F);
+  deg_int = static_cast<int32_t>(deg);
+  min = (deg - static_cast<float>(deg_int)) * 60.0;
+  min_int = static_cast<int32_t>(min);
+  sec = (min - static_cast<float>(min_int)) * 60.0;
+  add_text((deg < 0) ? "W" : "E", "", 16, 12);
+  add_text(str(boost::format("%2d") % abs(deg_int)), "o", 17, 12);
+  add_text(str(boost::format("%2d") % abs(min_int)), "'", 20, 12);
+  add_text(str(boost::format("%5.2f") % abs(sec)), "\"", 22, 12);
 }
 
 void SDLOSD::draw() {
@@ -161,14 +238,12 @@ void SDLOSD::draw() {
     m_home_arrow->render((canonical_screen_width - m_home_arrow->width()) / 2, 10, 0, home_direction);
   }
 
-/*
   // Render the north arrow
   if (m_north_arrow) {
     float north_direction = 0;
-    m_telem->get_value("north_direction", north_direction);
+    m_telem->get_value("heading", north_direction);
     m_north_arrow->render((canonical_screen_width - m_north_arrow->width()) / 2,
-			  canonical_screen_height - m_north_arrow->width() - 10,
-			  0, north_direction);
+			  canonical_screen_height - m_north_arrow->width() - 40,
+			  0, 360.0 - north_direction);
   }
-*/
 }
