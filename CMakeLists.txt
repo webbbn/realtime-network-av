@@ -29,11 +29,25 @@ if(GIT_FOUND AND EXISTS "${PROJECT_SOURCE_DIR}/.git")
   endif()
 endif()
 
+# Ensure the rtaudio directory was checked out successfully
+if(NOT EXISTS "${PROJECT_SOURCE_DIR}/modules/rtaudio/CMakeLists.txt")
+  message(FATAL_ERROR "The rtaudio submodule was not downloaded! GIT_SUBMODULE was turned off or failed. Please update submodules and try again.")
+endif()
+
+# Ensure the mavlink directory was checked out successfully
+if(NOT EXISTS "${PROJECT_SOURCE_DIR}/modules/mavlink/protocol.h")
+  message(FATAL_ERROR "The mavlink submodule was not downloaded! GIT_SUBMODULE was turned off or failed. Please update submodules and try again.")
+endif()
+
+# Ensure the mavlink directory was checked out successfully
+if(NOT EXISTS "${PROJECT_SOURCE_DIR}/modules/dcadec/dcadec.c")
+  message(FATAL_ERROR "The dcadec submodule was not downloaded! GIT_SUBMODULE was turned off or failed. Please update submodules and try again.")
+endif()
+
 # Add the local include directory to the include path
 include_directories(${PROJECT_SOURCE_DIR}/include)
 
 if (USE_OMX)
-
   include_directories(/opt/vc/include /opt/vc/include/interface/vcos/pthreads /opt/vc/include/interface/vmcs_host/linux)
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DSTANDALONE -D__STDC_CONSTANT_MACROS -D__STDC_LIMIT_MACROS -DTARGET_POSIX -D_LINUX -DPIC -D_REENTRANT -D_LARGEFILE64_SOURCE -D_FILE_OFFSET_BITS=64 -U_FORTIFY_SOURCE -DHAVE_LIBOPENMAX=2 -DOMX -DOMX_SKIP64BIT -ftree-vectorize -pipe -DUSE_EXTERNAL_OMX -DHAVE_LIBBCM_HOST -DUSE_EXTERNAL_LIBBCM_HOST -DUSE_VCHIQ_ARM")
   link_directories("/opt/vc/lib")
@@ -42,18 +56,12 @@ if (USE_OMX)
   install(TARGETS rpi-camera-server DESTINATION bin)
 endif (USE_OMX)
 
-
-# Ensure the rtaudio directory was checked out successfully
-if(NOT EXISTS "${PROJECT_SOURCE_DIR}/rtaudio/CMakeLists.txt")
-  message(FATAL_ERROR "The submodules were not downloaded! GIT_SUBMODULE was turned off or failed. Please update submodules and try again.")
-endif()
-
 # Add rtaudio to the list of directories to build
-add_subdirectory(rtaudio)
+add_subdirectory(modules/rtaudio)
 
 # Add the rtaudio directory to the paths
-include_directories("${PROJECT_SOURCE_DIR}/rtaudio")
-link_directories("${PROJECT_SOURCE_DIR}/rtaudio")
+include_directories("${PROJECT_SOURCE_DIR}/modules/rtaudio")
+link_directories("${PROJECT_SOURCE_DIR}/modules/rtaudio")
 
 # Find the boost libraries
 find_package(Boost REQUIRED COMPONENTS program_options system)
@@ -64,7 +72,7 @@ add_executable(udp_audio_player src/udp_audio_player.cc)
 target_link_libraries(udp_audio_player rtaudio ${Extra_Libraries} ${Boost_LIBRARIES})
 install(TARGETS udp_audio_player DESTINATION bin)
 
-add_subdirectory(dcadec)
+add_subdirectory(modules/dcadec)
 
 # To find and use ffmpeg avcodec library
 find_path(AVCODEC_INCLUDE_DIR libavcodec/avcodec.h)
@@ -73,8 +81,8 @@ find_library(AVFORMAT_LIBRARY avformat)
 find_library(AVUTIL_LIBRARY avutil)
 find_library(SWSCALE_LIBRARY swscale)
 include_directories(${AVCODEC_INCLUDE_DIR})
-find_path(DCADEC_INCLUDE_DIR libdcadec/common.h PATHS ${PROJECT_SOURCE_DIR}/dcadec)
-find_library(DCADEC_LIBRARY dcacec PATHS ${PROJECT_SOURCE_DIR}/dcadec)
+find_path(DCADEC_INCLUDE_DIR libdcadec/common.h PATHS ${PROJECT_SOURCE_DIR}/modules/dcadec)
+find_library(DCADEC_LIBRARY dcacec PATHS ${PROJECT_SOURCE_DIR}/modules/dcadec)
 include_directories(${DCADEC_INCLUDE_DIR})
 
 find_package(SDL2)
@@ -82,7 +90,7 @@ find_library(SDL2_TTF_LIBRARY SDL2_ttf)
 find_library(SDL2_IMAGE_LIBRARY SDL2_image)
 
 # Add the mavlink directory to the include path
-include_directories(${PROJECT_SOURCE_DIR}/mavlink/common)
+include_directories(${PROJECT_SOURCE_DIR}/modules/mavlink/common)
 
 include_directories(${SDL2_INCLUDE_DIRS})
 add_executable(video_stream_player
@@ -99,7 +107,7 @@ find_package(ALSA)
 if (ALSA_FOUND)
   include_directories(${ALSA_INCLUDE_DIRS})
   add_executable(spdif_to_udp src/spdif_to_udp.cc)
-  link_directories(dcadec)
+  link_directories(modules/dcadec)
   target_link_libraries(spdif_to_udp dcadec asound ${Boost_LIBRARIES})
   install(TARGETS spdif_to_udp DESTINATION bin)
 endif ()

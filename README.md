@@ -8,7 +8,7 @@ A collection of utilities for real-time encoding and decoding audio and video st
 
 # Compile SDL on Raspberry Pi that displays on the framebuffer
 
-*Downloaded from:* https://choccyhobnob.com/sdl2-2-0-8-on-raspberry-pi/
+*Derived from:* https://choccyhobnob.com/sdl2-2-0-8-on-raspberry-pi/
 
 ~~~
 sudo apt-get remove libsdl2-dev
