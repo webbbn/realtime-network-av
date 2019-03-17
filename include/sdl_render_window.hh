@@ -18,7 +18,7 @@ public:
 
   bool good() const;
 
-  bool check_for_quit();
+  bool check_for_quit(SDL_Event &event);
 
   void update(uint32_t width, uint32_t height,
 	      uint8_t *y_plane, uint8_t *u_plane, uint8_t *v_plane);

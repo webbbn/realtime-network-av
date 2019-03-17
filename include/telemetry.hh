@@ -6,6 +6,7 @@
 
 #include <boost/asio.hpp>
 
+#include "transmitter.hh"
 
 struct Telemetry {
 #if BOOST_VERSION < 106600
@@ -14,9 +15,12 @@ struct Telemetry {
   typedef boost::asio::io_context io_context;
 #endif
 
-  Telemetry(io_context &io_context);
+  Telemetry(io_context &io_context, const Transmitter &tx);
 
-  bool get_value(const std::string &name, float &value);
+  bool get_value(const std::string &name, float &value) const;
+
+  bool armed() const;
+  void armed(bool val);
 
 private:
   typedef std::map<std::string, float> NVMap;
@@ -24,9 +28,17 @@ private:
   void set_value(const std::string &name, float value);
 
   void reader_thread();
+  void control_thread();
 
-  boost::asio::ip::udp::socket m_sock;
+  boost::asio::ip::udp::socket m_recv_sock;
+  boost::asio::ip::udp::socket m_send_sock;
   NVMap m_values;
+  const Transmitter &m_tx;
+  uint8_t m_sysid;
+  uint8_t m_compid;
+  std::mutex m_sock_mutex;
+  boost::asio::ip::udp::endpoint m_sender_endpoint;
+  bool m_sender_valid;
 };
 
 #endif /* RTNAV_TELEMETRY_HH */

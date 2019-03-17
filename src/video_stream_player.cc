@@ -11,6 +11,7 @@
 #include "texture.hh"
 #include "ffmpeg_decoder.hh"
 #include "sdl_render_window.hh"
+#include "transmitter.hh"
 
 namespace po=boost::program_options;
 namespace ip=boost::asio::ip;
@@ -63,11 +64,25 @@ int main(int argc, char* argv[]) {
   boost::asio::io_context io_context;
 #endif
 
+  // Initialize SDL for video output and joystick.
+  if(SDL_Init(SDL_INIT_VIDEO | SDL_INIT_JOYSTICK)) {
+    std::cerr << "Could not initialize SDL - " << SDL_GetError() << std::endl;
+    SDL_Quit();
+    exit(1);
+  }
+
+  // Create the interface to read from the transmitter;
+  Transmitter tx;
+  if (!tx.good()) {
+    std::cerr << "Error connecting to the transmitter" << std::endl;
+    return -1;
+  }
+
   // Create the address resolver
   ip::tcp::resolver tcp_resolver(io_context);
 
   // Create the telemetry class
-  std::shared_ptr<Telemetry> telem(new Telemetry(io_context));
+  std::shared_ptr<Telemetry> telem(new Telemetry(io_context, tx));
 
   // Create the class for rendering everything
   SDLRenderWindow win(telem, font_file, home_dir_icon, north_arrow_icon);
@@ -84,7 +99,10 @@ int main(int argc, char* argv[]) {
     // Create the decoder class
     dec.reset(new FFMpegDecoder(url, draw_cb));
 
-    while (dec->decode_url() && !win.check_for_quit()) { }
+    SDL_Event event;
+    while (dec->decode_url() && !win.check_for_quit(event)) {
+      tx.update(event);
+    }
 
   } else {
 
@@ -116,7 +134,9 @@ int main(int argc, char* argv[]) {
 	  done = !dec->decode(buffer, recv);
 	}
 
-	done |= win.check_for_quit();
+	SDL_Event event;
+	done |= win.check_for_quit(event);
+	tx.update(event);
       }
     }
 

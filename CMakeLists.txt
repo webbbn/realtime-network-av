@@ -99,7 +99,8 @@ add_executable(video_stream_player
   src/texture.cc
   src/ffmpeg_decoder.cc
   src/sdl_osd.cc
-  src/sdl_render_window.cc)
+  src/sdl_render_window.cc
+  src/transmitter.cc)
 target_link_libraries(video_stream_player ${AVCODEC_LIBRARY} ${AVFORMAT_LIBRARY} ${AVUTIL_LIBRARY} ${SWSCALE_LIBRARY} ${SDL2_LIBRARIES} ${SDL2_TTF_LIBRARY} ${SDL2_IMAGE_LIBRARY} ${Boost_LIBRARIES} ${Extra_Libraries})
 install(TARGETS video_stream_player DESTINATION bin)
 

@@ -12,13 +12,6 @@ SDLRenderWindow::SDLRenderWindow(std::shared_ptr<Telemetry> telem,
   m_telem(telem), m_font_file(font_file), m_home_dir_icon(home_dir_icon),
   m_north_arrow_icon(north_arrow_icon), m_screen(0), m_renderer(0), m_texture(0) {
 
-  // Initialize SDL for video output.
-  if(SDL_Init(SDL_INIT_VIDEO)) {
-    std::cerr << "Could not initialize SDL - " << SDL_GetError() << std::endl;
-    SDL_Quit();
-    exit(1);
-  }
-
   // Initialize SDL_ttf library
   if (TTF_Init() != 0) {
     std::cerr << "TTF_Init() Failed: " << TTF_GetError() << std::endl;
@@ -55,10 +48,9 @@ bool SDLRenderWindow::good() const {
   return m_screen && m_texture && m_renderer;
 }
 
-bool SDLRenderWindow::check_for_quit() {
+bool SDLRenderWindow::check_for_quit(SDL_Event &event) {
 
   // Check for the SDL quit event.
-  SDL_Event event;
   SDL_PollEvent(&event);
   if (event.type == SDL_QUIT) {
     return true;
