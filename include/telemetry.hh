@@ -15,7 +15,7 @@ struct Telemetry {
   typedef boost::asio::io_context io_context;
 #endif
 
-  Telemetry(io_context &io_context, const Transmitter &tx);
+  Telemetry(io_context &io_context, Transmitter &tx);
 
   bool get_value(const std::string &name, float &value) const;
 
@@ -33,10 +33,9 @@ private:
   boost::asio::ip::udp::socket m_recv_sock;
   boost::asio::ip::udp::socket m_send_sock;
   NVMap m_values;
-  const Transmitter &m_tx;
+  Transmitter &m_tx;
   uint8_t m_sysid;
   uint8_t m_compid;
-  std::mutex m_sock_mutex;
   boost::asio::ip::udp::endpoint m_sender_endpoint;
   bool m_sender_valid;
 };

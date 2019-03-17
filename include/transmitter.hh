@@ -10,15 +10,14 @@ public:
 
   Transmitter();
 
-  bool good() const;
+  bool connect();
 
-  void update(const SDL_Event &event);
+  bool connected() const;
 
-  float channel(uint8_t idx) const;
+  uint16_t channel(uint8_t idx);
 
 private:
   SDL_Joystick *m_joystick;
-  std::vector<uint16_t> m_channels;
 };
 
 #endif /* RTNAV_TRANSMITTER_HH */

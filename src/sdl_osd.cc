@@ -160,7 +160,7 @@ void SDLOSD::add_telemetry(const std::string &key, const std::string &format,
   if (!m_telem->get_value(key, value)) {
     value = 0;
   }
-  add_text(str(boost::format(format) % value), units, x, y);
+  add_text(str(boost::format(format) % value), units, x, y, r, g, b, a, rb, gb, bb, ab);
 }
 
 void SDLOSD::update() {
@@ -172,15 +172,13 @@ void SDLOSD::update() {
     low_bat = (remain < 0.15);
   }
   if (low_bat) {
-    add_telemetry("voltage_battery", "%4.1f", "V", 0, 0,
-		  255, 128, 128, 255, 128, 128);
-    add_telemetry("battery_remaining", "%4.1f", "%", 0, 2,
-		  255, 128, 128, 255, 128, 128);
+    add_telemetry("battery_remaining", "%4.1f", "%", 0, 0, 255, 0, 0);
+    add_telemetry("voltage_battery", "%4.1f", "V", 0, 1, 255, 0, 0);
   } else {
-    add_telemetry("voltage_battery", "%4.1f", "V", 0, 0);
-    add_telemetry("battery_remaining", "%4.1f", "%", 0, 2);
+    add_telemetry("battery_remaining", "%4.1f", "%", 0, 0, 0, 255, 0);
+    add_telemetry("voltage_battery", "%4.1f", "V", 0, 1, 0, 255, 0);
   }
-  add_telemetry("current_battery", "%4.1f", "A", 0, 1);
+  add_telemetry("current_battery", "%4.1f", "A", 0, 2);
 
   // Draw the distance/speed text
   add_telemetry("distance", "%6.2f", "km", 25, 0);

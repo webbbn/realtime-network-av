@@ -16,6 +16,16 @@
 namespace po=boost::program_options;
 namespace ip=boost::asio::ip;
 
+bool check_for_quit() {
+  // Check for the SDL quit event.
+  SDL_Event event;
+  SDL_PollEvent(&event);
+  if (event.type == SDL_QUIT) {
+    return true;
+  }
+  return false;
+}
+
 int main(int argc, char* argv[]) {
   std::string hostname;
   std::string port;
@@ -73,10 +83,6 @@ int main(int argc, char* argv[]) {
 
   // Create the interface to read from the transmitter;
   Transmitter tx;
-  if (!tx.good()) {
-    std::cerr << "Error connecting to the transmitter" << std::endl;
-    return -1;
-  }
 
   // Create the address resolver
   ip::tcp::resolver tcp_resolver(io_context);
@@ -99,10 +105,7 @@ int main(int argc, char* argv[]) {
     // Create the decoder class
     dec.reset(new FFMpegDecoder(url, draw_cb));
 
-    SDL_Event event;
-    while (dec->decode_url() && !win.check_for_quit(event)) {
-      tx.update(event);
-    }
+    while (dec->decode_url() && !check_for_quit()) {}
 
   } else {
 
@@ -134,9 +137,7 @@ int main(int argc, char* argv[]) {
 	  done = !dec->decode(buffer, recv);
 	}
 
-	SDL_Event event;
-	done |= win.check_for_quit(event);
-	tx.update(event);
+	done |= check_for_quit();
       }
     }
 

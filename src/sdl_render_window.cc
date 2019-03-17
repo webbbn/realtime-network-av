@@ -48,16 +48,6 @@ bool SDLRenderWindow::good() const {
   return m_screen && m_texture && m_renderer;
 }
 
-bool SDLRenderWindow::check_for_quit(SDL_Event &event) {
-
-  // Check for the SDL quit event.
-  SDL_PollEvent(&event);
-  if (event.type == SDL_QUIT) {
-    return true;
-  }
-  return false;
-}
-
 void SDLRenderWindow::update(uint32_t width, uint32_t height, uint8_t *y_plane, uint8_t *u_plane,
 			     uint8_t *v_plane) {
 
