@@ -11,27 +11,24 @@ static const uint8_t g_font_size = 40;
 static const uint8_t g_line_size = static_cast<uint8_t>(g_font_size * 1.25);
 static const uint8_t g_text_border_width = 2;
 static const char *g_mode_strings[] = {
-				       "Manual",
-				       "Circle",
-				       "Stabilize",
-				       "Training",
-				       "Acro",
-				       "FBWA",
-				       "FBWB",
-				       "Cruise",
-				       "Autotune",
-				       "Auto",
-				       "Rtl",
-				       "Loiter",
-				       "Land",
-				       "Guided",
-				       "Initialising",
-				       "QStabilize",
-				       "QHover",
-				       "QLoiter",
-				       "QLand",
-				       "QRTL",
-				       "QAutotune"
+  "Stabilize"  // manual airframe angle with manual throttle
+  "Acro",      // manual body-frame angular rate with manual throttle
+  "Alt Hold",  // manual airframe angle with automatic throttle
+  "Auto",      // fully automatic waypoint control using mission commands
+  "Guided",    // fully automatic fly to coordinate or fly at velocity/direction using GCS immediate commands
+  "Loiter",    // automatic horizontal acceleration with automatic throttle
+  "RTL",       // automatic return to launching point
+  "Circle",    // automatic circular flight with automatic throttle
+  "Land",      // automatic landing with horizontal position control
+  "Drift",     // semi-automous position, yaw and throttle control
+  "Sport",     // manual earth-frame angular rate control with manual throttle
+  "Flip",      // automatically flip the vehicle on the roll axis
+  "Autotune",  // automatically tune the vehicle's roll and pitch gains
+  "Poshold",   // automatic position hold with manual override, with automatic throttle
+  "Brake",     // full-brake using inertial/GPS system, no pilot input
+  "Throw",     // throw to launch mode using inertial/GPS system, no pilot input
+  "Avoid",     // automatic avoidance of obstacles in the macro scale - e.g. full-sized aircraft
+  "Guided",    // guided mode but only accepts attitude and altitude
 };
 
 SDLOSD::SDLOSD(const std::string &font_file, const std::string &home_dir_icon,
