@@ -8,9 +8,11 @@
 SDLRenderWindow::SDLRenderWindow(std::shared_ptr<Telemetry> telem,
 				 const std::string &font_file,
 				 const std::string &home_dir_icon,
-				 const std::string &north_arrow_icon) :
+				 const std::string &north_arrow_icon,
+				 bool fullscreen) :
   m_telem(telem), m_font_file(font_file), m_home_dir_icon(home_dir_icon),
-  m_north_arrow_icon(north_arrow_icon), m_screen(0), m_renderer(0), m_texture(0) {
+  m_north_arrow_icon(north_arrow_icon), m_screen(0), m_renderer(0), m_texture(0),
+  m_fullscreen(fullscreen) {
 
   // Initialize SDL_ttf library
   if (TTF_Init() != 0) {
@@ -54,7 +56,8 @@ void SDLRenderWindow::update(uint32_t width, uint32_t height, uint8_t *y_plane, 
   // Create the playback window.
   if (!m_screen) {
     m_screen = SDL_CreateWindow("Realtime Video Player", SDL_WINDOWPOS_UNDEFINED,
-				SDL_WINDOWPOS_UNDEFINED, width, height, 0);
+				SDL_WINDOWPOS_UNDEFINED, width, height,
+				(m_fullscreen ? SDL_WINDOW_FULLSCREEN : 0));
     if (!m_screen) {
       std::cerr << "Cound not create the SDL window" << std::endl;
       return;

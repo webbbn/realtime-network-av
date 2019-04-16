@@ -12,7 +12,8 @@ public:
   SDLRenderWindow(std::shared_ptr<Telemetry> telem,
 		  const std::string &font_file,
 		  const std::string &home_dir_icon,
-		  const std::string &north_arrow_icon);
+		  const std::string &north_arrow_icon,
+		  bool fullstcreen);
 
   ~SDLRenderWindow();
 
@@ -32,6 +33,7 @@ private:
   SDL_Texture *m_texture;
   uint32_t m_screen_width;
   uint32_t m_screen_height;
+  bool m_fullscreen;
 };
 
 #endif /* RTNAV_SDL_RENDER_WINDOW_HH */
