@@ -34,7 +34,7 @@ uint16_t Transmitter::channel(uint8_t idx) {
 
   if (connected()) {
     return static_cast<uint16_t>((static_cast<float>(SDL_JoystickGetAxis(m_joystick, idx)) /
-				  65536.0 + 0.5) * 1000.0 + 1000.0);
+				  65536.0 + 0.5) * 800.0 + 1100.0);
   } else {
     return 0;
   }

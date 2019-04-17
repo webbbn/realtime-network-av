@@ -11,7 +11,7 @@ Telemetry::Telemetry(io_context &io_context, Transmitter &tx) :
 							 14550)),
   m_send_sock(io_context, boost::asio::ip::udp::endpoint(boost::asio::ip::address_v4::any(),
 							 14551)),
-  m_tx(tx), m_sysid(0), m_compid(0), m_sender_valid(false) {
+  m_tx(tx), m_sysid(0), m_compid(0), m_sender_valid(false), m_rec_bat_status(false) {
   m_recv_sock.set_option(boost::asio::socket_base::broadcast(true));
   m_send_sock.set_option(boost::asio::socket_base::broadcast(true));
   std::thread([this]() { this->reader_thread(); }).detach();
@@ -50,9 +50,11 @@ void Telemetry::reader_thread() {
 	case MAVLINK_MSG_ID_SYS_STATUS:
 	  mavlink_sys_status_t sys_status;
 	  mavlink_msg_sys_status_decode(&msg, &sys_status);
-	  set_value("voltage_battery", sys_status.voltage_battery / 100.0);
+	  //if (!m_rec_bat_status) {
+	  set_value("voltage_battery", sys_status.voltage_battery / 1000.0);
 	  set_value("current_battery", sys_status.current_battery);
 	  set_value("battery_remaining", sys_status.battery_remaining);
+	  //}
 	  break;
 	case MAVLINK_MSG_ID_NAV_CONTROLLER_OUTPUT:
 	  mavlink_nav_controller_output_t nav;
@@ -127,11 +129,19 @@ void Telemetry::reader_thread() {
 	case MAVLINK_MSG_ID_BATTERY_STATUS:
 	  mavlink_battery_status_t bat;
 	  mavlink_msg_battery_status_decode(&msg, &bat);
-/*
+	  /*
 	  set_value("voltage_battery", bat.voltages[0] / 1000.0);
 	  set_value("current_battery", bat.current_battery);
 	  set_value("battery_remaining", bat.battery_remaining);
-*/
+	  m_rec_bat_status = true;
+	  */
+	  break;
+	case MAVLINK_MSG_ID_HOME_POSITION:
+	  mavlink_home_position_t home;
+	  mavlink_msg_home_position_decode(&msg, &home);
+	  set_value("home_latitude", home.latitude * 1e-7);
+	  set_value("home_longitude", home.longitude * 1e-7);
+	  set_value("home_altitude", home.altitude);
 	  break;
 	default:
 	  std::cerr << "Received packet: SYS: " << int(msg.sysid)
@@ -158,14 +168,11 @@ void Telemetry::control_thread() {
     
   while (!done) {
 
-    // Send the heartbeat message every second
-    if (counter == 50) {
-      mavlink_heartbeat_t hb;
-      mavlink_message_t msg_hb;
-      hb.type = MAV_TYPE_GCS;
-      mavlink_msg_heartbeat_encode(255, 0, &msg_hb, &hb);
-      int len = mavlink_msg_to_send_buffer(data, &msg_hb);
-      m_send_sock.send_to(boost::asio::buffer(data, len), m_sender_endpoint);
+    if (counter == 200) {
+      std::cerr << "rc: " << m_tx.channel(0) << " " << m_tx.channel(1) << " "
+		<< m_tx.channel(2) << " " << m_tx.channel(3) << " "
+		<< m_tx.channel(4) << " " << m_tx.channel(5) << " "
+		<< m_tx.channel(6) << " " << m_tx.channel(7) << std::endl;
       counter = 0;
     } else {
       ++counter;
@@ -188,9 +195,12 @@ void Telemetry::control_thread() {
       mavlink_msg_rc_channels_override_encode(255, 0, &msg_rc, &rc);
       int len = mavlink_msg_to_send_buffer(data, &msg_rc);
       m_send_sock.send_to(boost::asio::buffer(data, len), m_sender_endpoint);
+      mavlink_msg_rc_channels_override_encode(255, 1, &msg_rc, &rc);
+      len = mavlink_msg_to_send_buffer(data, &msg_rc);
+      m_send_sock.send_to(boost::asio::buffer(data, len), m_sender_endpoint);
     }
 
     // Sleep for 20 ms
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    std::this_thread::sleep_for(std::chrono::milliseconds(5));
   }
 }

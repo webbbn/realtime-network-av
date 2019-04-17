@@ -25,17 +25,18 @@ private:
 		SDL_Rect &text_rect);
 
   bool add_text(const std::string &text, const std::string &units,
-		uint8_t col, int8_t row,
+		int8_t col, int8_t row, bool from_center,
 		uint8_t r = 255, uint8_t g = 255, uint8_t b = 255, uint8_t a = 255,
 		uint8_t rb = 0, uint8_t gb = 0, uint8_t bb = 0, uint8_t ab = 0);
 
   void add_telemetry(const std::string &key, const std::string &format,
-		     const std::string &units, uint32_t x, uint32_t y,
+		     const std::string &units, int32_t x, int32_t y, bool from_center,
 		     uint8_t r = 255, uint8_t g = 255, uint8_t b = 255, uint8_t a = 255,
 		     uint8_t rb = 0, uint8_t gb = 0, uint8_t bb = 0, uint8_t ab = 0);
 
   uint8_t m_text_border; // The width of the border around text in pixels
   uint8_t m_num_lines;
+  uint8_t m_num_cols;
   uint32_t m_scaled_screen_height;
   SDL_Renderer *m_renderer;
   Texture *m_home_arrow;

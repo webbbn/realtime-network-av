@@ -38,6 +38,7 @@ private:
   uint8_t m_compid;
   boost::asio::ip::udp::endpoint m_sender_endpoint;
   bool m_sender_valid;
+  bool m_rec_bat_status;
 };
 
 #endif /* RTNAV_TELEMETRY_HH */

@@ -22,8 +22,9 @@ SDLRenderWindow::SDLRenderWindow(std::shared_ptr<Telemetry> telem,
   // Get the screen size
   SDL_DisplayMode DM;
   SDL_GetCurrentDisplayMode(0, &DM);
+  std::cerr << "DS: " << DM.w << "x" << DM.h << std::endl;
   // This is a hack to support windowed mode
-  if (DM.w <= 720) {
+  if (DM.w <= 1920) {
     m_screen_width = DM.w;
     m_screen_height = DM.h;
   } else {
