@@ -9,7 +9,7 @@ SDLRenderWindow::SDLRenderWindow(std::shared_ptr<Telemetry> telem,
 				 const std::string &font_file,
 				 const std::string &home_dir_icon,
 				 const std::string &north_arrow_icon,
-				 uint8_t screen,
+				 uint16_t screen,
 				 bool fullscreen) :
   m_telem(telem), m_font_file(font_file), m_home_dir_icon(home_dir_icon),
   m_north_arrow_icon(north_arrow_icon), m_screen(screen), m_win(0), m_renderer(0), m_texture(0),
@@ -57,8 +57,7 @@ void SDLRenderWindow::update(uint32_t width, uint32_t height, uint8_t *y_plane, 
 
   // Create the playback window.
   if (!m_win) {
-    uint32_t nscreens = SDL_GetNumVideoDisplays();
-    if (m_fullscreen && (nscreens >= m_screen)) {
+    if (m_fullscreen && (SDL_GetNumVideoDisplays() >= m_screen)) {
       SDL_Rect bounds;
       SDL_GetDisplayBounds(m_screen - 1, &bounds);
       m_win = SDL_CreateWindow("Realtime Video Player",
