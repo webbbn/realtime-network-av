@@ -13,6 +13,7 @@ public:
 		  const std::string &font_file,
 		  const std::string &home_dir_icon,
 		  const std::string &north_arrow_icon,
+		  uint8_t screen,
 		  bool fullstcreen);
 
   ~SDLRenderWindow();
@@ -28,7 +29,8 @@ private:
   std::string m_home_dir_icon;
   std::string m_north_arrow_icon;
   std::shared_ptr<SDLOSD> m_osd;
-  SDL_Window *m_screen;
+  uint8_t m_screen;
+  SDL_Window *m_win;
   SDL_Renderer *m_renderer;
   SDL_Texture *m_texture;
   uint32_t m_screen_width;

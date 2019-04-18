@@ -32,6 +32,7 @@ int main(int argc, char* argv[]) {
   uint32_t packet_size;
   bool use_udp;
   bool fullscreen;
+  uint8_t screen;
   std::string url;
   std::string font_file;
   std::string home_dir_icon;
@@ -41,10 +42,11 @@ int main(int argc, char* argv[]) {
     ("help", "produce help message")
     ("hostname,h", po::value<std::string>(&hostname), "name or IP address of the video server")
     ("port,p", po::value<std::string>(&port), "port number of the video server")
-    ("packet_size,s", po::value<uint32_t>(&packet_size)->default_value(32767),
+    ("packet_size", po::value<uint32_t>(&packet_size)->default_value(32767),
      "the size of the packet buffer (the maximum size of a packet)")
     ("use_udp,U", po::bool_switch(&use_udp), "use the UDP protocol rather than TCP")
     ("fullscreen,f", po::bool_switch(&fullscreen), "make the render window full screen")
+    ("screen,s", po::value<uint8_t>(&screen), "the screen to display the video on")
     ("url,u", po::value<std::string>(&url), "read from the specified URL")
     ("font", po::value<std::string>(&font_file), "the path to the OSD font file")
     ("home_dir_icon", po::value<std::string>(&home_dir_icon),
@@ -88,7 +90,7 @@ int main(int argc, char* argv[]) {
   std::shared_ptr<Telemetry> telem(new Telemetry(io_context, tx));
 
   // Create the class for rendering everything
-  SDLRenderWindow win(telem, font_file, home_dir_icon, north_arrow_icon, fullscreen);
+  SDLRenderWindow win(telem, font_file, home_dir_icon, north_arrow_icon, screen, fullscreen);
 
   // Create the draw callback
   auto draw_cb = [&win](uint32_t width, uint32_t height,

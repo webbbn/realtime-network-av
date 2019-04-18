@@ -9,9 +9,10 @@ SDLRenderWindow::SDLRenderWindow(std::shared_ptr<Telemetry> telem,
 				 const std::string &font_file,
 				 const std::string &home_dir_icon,
 				 const std::string &north_arrow_icon,
+				 uint8_t screen,
 				 bool fullscreen) :
   m_telem(telem), m_font_file(font_file), m_home_dir_icon(home_dir_icon),
-  m_north_arrow_icon(north_arrow_icon), m_screen(0), m_renderer(0), m_texture(0),
+  m_north_arrow_icon(north_arrow_icon), m_screen(screen), m_win(0), m_renderer(0), m_texture(0),
   m_fullscreen(fullscreen) {
 
   // Initialize SDL_ttf library
@@ -42,24 +43,34 @@ SDLRenderWindow::~SDLRenderWindow() {
   if (m_renderer) {
     SDL_DestroyRenderer(m_renderer);
   }
-  if (m_screen) {
-    SDL_DestroyWindow(m_screen);
+  if (m_win) {
+    SDL_DestroyWindow(m_win);
   }
 }
 
 bool SDLRenderWindow::good() const {
-  return m_screen && m_texture && m_renderer;
+  return m_win && m_texture && m_renderer;
 }
 
 void SDLRenderWindow::update(uint32_t width, uint32_t height, uint8_t *y_plane, uint8_t *u_plane,
 			     uint8_t *v_plane) {
 
   // Create the playback window.
-  if (!m_screen) {
-    m_screen = SDL_CreateWindow("Realtime Video Player", SDL_WINDOWPOS_UNDEFINED,
-				SDL_WINDOWPOS_UNDEFINED, width, height,
-				(m_fullscreen ? SDL_WINDOW_FULLSCREEN : 0));
-    if (!m_screen) {
+  if (!m_win) {
+    uint32_t nscreens = SDL_GetNumVideoDisplays();
+    if (m_fullscreen && (nscreens >= m_screen)) {
+      SDL_Rect bounds;
+      SDL_GetDisplayBounds(m_screen - 1, &bounds);
+      m_win = SDL_CreateWindow("Realtime Video Player",
+			       bounds.x, bounds.y, bounds.w, bounds.h,
+			       SDL_WINDOW_BORDERLESS);
+    } else {
+      m_win = SDL_CreateWindow("Realtime Video Player", SDL_WINDOWPOS_UNDEFINED,
+			       SDL_WINDOWPOS_UNDEFINED, width, height,
+			       (m_fullscreen ? SDL_WINDOW_FULLSCREEN : 0));
+    }
+
+    if (!m_win) {
       std::cerr << "Cound not create the SDL window" << std::endl;
       return;
     }
@@ -67,10 +78,10 @@ void SDLRenderWindow::update(uint32_t width, uint32_t height, uint8_t *y_plane, 
 
   // Create the renderer
   if (!m_renderer) {
-    m_renderer = SDL_CreateRenderer(m_screen, -1, 0);
+    m_renderer = SDL_CreateRenderer(m_win, -1, 0);
     if (!m_renderer) {
-      SDL_DestroyWindow(m_screen);
-      std::cerr << "Cound not create the SDL renderer" << std::endl;
+      SDL_DestroyWindow(m_win);
+      //std::cerr << "Cound not create the SDL renderer" << std::endl;
       return;
     }
     if (m_screen_width == 0) {
@@ -85,7 +96,7 @@ void SDLRenderWindow::update(uint32_t width, uint32_t height, uint8_t *y_plane, 
 				  SDL_TEXTUREACCESS_STREAMING, width, height);
     if (!m_texture) {
       SDL_DestroyRenderer(m_renderer);
-      SDL_DestroyWindow(m_screen);
+      SDL_DestroyWindow(m_win);
       std::cerr << "Could not create the SDL texture" << std::endl;
       return;
     }
