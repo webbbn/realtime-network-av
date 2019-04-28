@@ -6,14 +6,18 @@ A collection of utilities for real-time encoding and decoding audio and video st
 
 `git submodule update --init --recursive`
 
-# Compile SDL on Raspberry Pi that displays on the framebuffer
+# Install dependent packages
+
+sudo apt-get install cmake libasound2-dev libboost-all-dev libavcodec-dev libavformat-dev libswscale-dev
+
+# Compile SDL on Raspberry Pi that displays on the framebuffer (only works on Raspberry Pi)
 
 *Derived from:* https://choccyhobnob.com/sdl2-2-0-8-on-raspberry-pi/
 
 ~~~
 sudo apt-get remove libsdl2-dev
 sudo apt-get autoremove -y
-sudo apt-get install libfontconfig-dev qt5-default automake mercurial libtool libfreeimage-dev libopenal-dev libpango1.0-dev libsndfile-dev libudev-dev libtiff5-dev libwebp-dev libasound2-dev libaudio-dev libxrandr-dev libxcursor-dev libxi-dev libxinerama-dev libxss-dev libesd0-dev freeglut3-dev libmodplug-dev libsmpeg-dev libjpeg-dev
+sudo apt-get install libfontconfig-dev qt5-default automake mercurial libtool libfreeimage-dev libopenal-dev libpango1.0-dev libsndfile-dev libudev-dev libtiff5-dev libwebp-dev libasound2-dev libaudio-dev libxrandr-dev libxcursor-dev libxi-dev libxinerama-dev libxss-dev libesd0-dev freeglut3-dev libmodplug-dev libsmpeg-dev libjpeg-dev libpng16-dev
 
 hg clone http://hg.libsdl.org/SDL
 
@@ -41,3 +45,14 @@ for D in SDL2_image-2.0.2 SDL2_mixer-2.0.2 SDL2_net-2.0.1 SDL2_ttf-2.0.14; do
   cd ..
 done
 ~~~
+
+## Otherwise, install SDL2 libraries
+
+sudo apt-get install libsdl2-dev libsdl2-image-dev libsdl2-ttf-dev
+
+# Compile the code
+
+mkdir build
+cd build
+cmake -DCMAKE_CXX_FLAGS="-O3 -DNDEBUG -std=c++11" -DCMAKE_INSTALL_PREFIX=/home/webbb/realtime-network-av/install ..
+
