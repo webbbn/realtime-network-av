@@ -115,6 +115,22 @@ int main(int argc, char* argv[]) {
     uint8_t *buffer = new uint8_t[packet_size];
 
     if (use_udp) {
+      boost::asio::ip::udp::endpoint listen_endpoint(boost::asio::ip::address_v4::any(),
+						     atoi(port.c_str()));
+      ip::udp::socket sock(io_context, listen_endpoint);
+      sock.set_option(boost::asio::socket_base::broadcast(true));
+
+      bool done = false;
+      int32_t sub_packet_num = -1;
+      size_t buffer_idx = 0;
+      while (!done) {
+	boost::asio::ip::udp::endpoint sender_endpoint;
+	size_t recv = sock.receive_from(boost::asio::buffer(buffer, packet_size), sender_endpoint);
+	if (recv > 0) {
+	  done = !dec->decode(buffer, recv);
+	}
+	done |= check_for_quit();
+      }
 
     } else {
 
