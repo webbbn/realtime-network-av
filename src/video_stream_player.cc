@@ -121,8 +121,6 @@ int main(int argc, char* argv[]) {
       sock.set_option(boost::asio::socket_base::broadcast(true));
 
       bool done = false;
-      int32_t sub_packet_num = -1;
-      size_t buffer_idx = 0;
       while (!done) {
 	boost::asio::ip::udp::endpoint sender_endpoint;
 	size_t recv = sock.receive_from(boost::asio::buffer(buffer, packet_size), sender_endpoint);

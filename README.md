@@ -8,22 +8,28 @@ A collection of utilities for real-time encoding and decoding audio and video st
 
 # Install dependent packages
 
-sudo apt-get install cmake libasound2-dev libboost-all-dev libavcodec-dev libavformat-dev libswscale-dev
+`sudo apt-get install cmake libasound2-dev libboost-all-dev libavcodec-dev libavformat-dev libswscale-dev`
+
+# Install dependent packages on Raspberry Pi
+
+`sudo apt-get install libomxil-bellagio-dev raspberrypi-kernel-headers libraspberrypi-dev`
 
 # Compile SDL on Raspberry Pi that displays on the framebuffer (only works on Raspberry Pi)
 
 *Derived from:* https://choccyhobnob.com/sdl2-2-0-8-on-raspberry-pi/
 
 ~~~
+mkdir build
+cd build
 sudo apt-get remove libsdl2-dev
 sudo apt-get autoremove -y
-sudo apt-get install libfontconfig-dev qt5-default automake mercurial libtool libfreeimage-dev libopenal-dev libpango1.0-dev libsndfile-dev libudev-dev libtiff5-dev libwebp-dev libasound2-dev libaudio-dev libxrandr-dev libxcursor-dev libxi-dev libxinerama-dev libxss-dev libesd0-dev freeglut3-dev libmodplug-dev libsmpeg-dev libjpeg-dev libpng16-dev
+sudo apt-get install libfontconfig-dev qt5-default automake mercurial libtool libfreeimage-dev libopenal-dev libpango1.0-dev libsndfile-dev libudev-dev libtiff5-dev libwebp-dev libasound2-dev libaudio-dev libxrandr-dev libxcursor-dev libxi-dev libxinerama-dev libxss-dev libesd0-dev freeglut3-dev libmodplug-dev libsmpeg-dev libjpeg-dev libpng-dev libdirectfb-dev libdirectfb-bin
 
 hg clone http://hg.libsdl.org/SDL
 
 cd SDL
 ./autogen.sh
-./configure --prefix=/home/webbb/sdl_build --disable-pulseaudio --disable-esd --disable-video-mir --disable-video-wayland --disable-video-opengl --host=arm-raspberry-linux-gnueabihf
+./configure --prefix=/home/webbb/sdl_build --disable-pulseaudio --disable-esd --disable-video-mir --disable-video-wayland --disable-video-opengl --enable-video-directfb --host=arm-raspberry-linux-gnueabihf
 make -j 3 install
 cd ..
 
@@ -52,7 +58,6 @@ sudo apt-get install libsdl2-dev libsdl2-image-dev libsdl2-ttf-dev
 
 # Compile the code
 
-mkdir build
-cd build
-cmake -DCMAKE_CXX_FLAGS="-O3 -DNDEBUG -std=c++11" -DCMAKE_INSTALL_PREFIX=/home/webbb/realtime-network-av/install ..
+cmake -DCMAKE_CXX_FLAGS="-O3 -DNDEBUG -std=c++11" -DCMAKE_PREFIX_PATH=/home/webbb/sdl_build -DCMAKE_INSTALL_PREFIX=/home/webbb/realtime-network-av/install ..
+make -j 4 install
 
