@@ -108,10 +108,12 @@ target_link_libraries(video_stream_player ${AVCODEC_LIBRARY} ${AVFORMAT_LIBRARY}
 install(TARGETS video_stream_player DESTINATION bin)
 
 find_library(V4L_LIBRARY v4l2)
-add_executable(v4l_h264_server
-  src/v4l_h264_server.cc)
-target_link_libraries(v4l_h264_server ${V4L_LIBRARY} ${Boost_LIBRARIES} ${Extra_Libraries})
-install(TARGETS v4l_h264_server DESTINATION bin)
+if (V4L_LIBRARY)
+  add_executable(v4l_h264_server
+    src/v4l_h264_server.cc)
+  target_link_libraries(v4l_h264_server ${V4L_LIBRARY} ${Boost_LIBRARIES} ${Extra_Libraries})
+  install(TARGETS v4l_h264_server DESTINATION bin)
+endif (V4L_LIBRARY)
 
 find_package(ALSA)
 if (ALSA_FOUND)

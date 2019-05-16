@@ -39,7 +39,9 @@ FFMpegDecoder::FFMpegDecoder(const std::string &url, DrawCallback cb) :
   avformat_network_init();
 
   // Open the input stream.
-  if (avformat_open_input(&m_format_ctx, url.c_str(), NULL, NULL) != 0) {
+  AVDictionary *opts = 0;
+  av_dict_set(&opts, "rtsp_transport", "tcp", 0);
+  if (avformat_open_input(&m_format_ctx, url.c_str(), NULL, &opts) != 0) {
     std::cerr << "Error connecting to the server" << std::endl;
     exit(1);
   }
