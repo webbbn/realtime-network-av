@@ -5,9 +5,9 @@
 
 #include "sdl_osd.hh"
 
-// Draw everything based on a screen size of 720p and scale it to the actual screen size.
-static const uint16_t g_canonical_screen_width = 800;
-static const uint8_t g_font_size = 20;
+// Draw everything based on a screen size of 1080p and scale it to the actual screen size.
+static const uint16_t g_canonical_screen_width = 1920;
+static const uint8_t g_font_size = 25;
 static const uint8_t g_line_size = static_cast<uint8_t>(g_font_size * 1.25);
 static const uint8_t g_text_border_width = 2;
 static const char *g_mode_strings[] = {
@@ -73,7 +73,7 @@ SDLOSD::SDLOSD(const std::string &font_file, const std::string &home_dir_icon,
     m_north_arrow = 0;
   }
 
-  // Scale the renderer based on a 800x480 screen size
+  // Scale the renderer based on a 1080p screen size
   float scale = static_cast<float>(display_width) / g_canonical_screen_width;
   SDL_RenderSetScale(m_renderer, scale, scale);
   m_num_lines = static_cast<uint8_t>((display_height / scale) / g_line_size);

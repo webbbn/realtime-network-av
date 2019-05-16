@@ -20,7 +20,7 @@ public:
 
   bool good() const;
 
-  void update(uint32_t width, uint32_t height,
+  void update(uint32_t video_width, uint32_t video_height,
 	      uint8_t *y_plane, uint8_t *u_plane, uint8_t *v_plane);
 
 private:

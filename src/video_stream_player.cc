@@ -130,7 +130,7 @@ int main(int argc, char* argv[]) {
 	done |= check_for_quit();
       }
 
-    } else {
+    } else if (hostname.length() > 0) {
 
       ip::tcp::socket sock(io_context);
 #if BOOST_VERSION < 106600
@@ -150,6 +150,18 @@ int main(int argc, char* argv[]) {
 	  done = !dec->decode(buffer, recv);
 	}
 
+	done |= check_for_quit();
+      }
+    } else {
+      uint8_t buf[1024];
+
+      bool done = false;
+      while (!done) {
+	size_t recv = fread(buf, 1, 1024, stdin);
+	if (recv > 0) {
+	  std::cerr << "recv: " << recv << std::endl;
+	  done = !dec->decode(buffer, recv);
+	}
 	done |= check_for_quit();
       }
     }

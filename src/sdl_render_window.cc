@@ -26,14 +26,8 @@ SDLRenderWindow::SDLRenderWindow(std::shared_ptr<Telemetry> telem,
   SDL_DisplayMode DM;
   SDL_GetCurrentDisplayMode(0, &DM);
   std::cerr << "DS: " << DM.w << "x" << DM.h << std::endl;
-  // This is a hack to support windowed mode
-  if (DM.w <= 1920) {
-    m_screen_width = DM.w;
-    m_screen_height = DM.h;
-  } else {
-    m_screen_width = 0;
-    m_screen_height = 0;
-  }
+  m_screen_width = DM.w;
+  m_screen_height = DM.h;
 }
 
 SDLRenderWindow::~SDLRenderWindow() {
@@ -52,21 +46,28 @@ bool SDLRenderWindow::good() const {
   return m_win && m_texture && m_renderer;
 }
 
-void SDLRenderWindow::update(uint32_t width, uint32_t height, uint8_t *y_plane, uint8_t *u_plane,
-			     uint8_t *v_plane) {
+void SDLRenderWindow::update(uint32_t video_width, uint32_t video_height,
+			     uint8_t *y_plane, uint8_t *u_plane, uint8_t *v_plane) {
+  uint32_t width = video_width;
+  uint32_t height = video_height;
 
   // Create the playback window.
   if (!m_win) {
-    if (m_fullscreen && (SDL_GetNumVideoDisplays() >= m_screen)) {
-      SDL_Rect bounds;
-      SDL_GetDisplayBounds(m_screen - 1, &bounds);
-      m_win = SDL_CreateWindow("Realtime Video Player",
-			       bounds.x, bounds.y, bounds.w, bounds.h,
-			       SDL_WINDOW_BORDERLESS);
+
+    if (m_fullscreen) {
+      if (SDL_GetNumVideoDisplays() >= m_screen) {
+	SDL_Rect bounds;
+	SDL_GetDisplayBounds(m_screen - 1, &bounds);
+	m_win = SDL_CreateWindow("Realtime Video Player",
+				 bounds.x, bounds.y, bounds.w, bounds.h,
+				 SDL_WINDOW_BORDERLESS);
+      } else {
+	m_win = SDL_CreateWindow("Realtime Video Player", SDL_WINDOWPOS_UNDEFINED,
+				 SDL_WINDOWPOS_UNDEFINED, width, height, SDL_WINDOW_FULLSCREEN);
+      }
     } else {
-      m_win = SDL_CreateWindow("Realtime Video Player", SDL_WINDOWPOS_UNDEFINED,
-			       SDL_WINDOWPOS_UNDEFINED, width, height,
-			       (m_fullscreen ? SDL_WINDOW_FULLSCREEN : 0));
+	m_win = SDL_CreateWindow("Realtime Video Player", SDL_WINDOWPOS_UNDEFINED,
+				 SDL_WINDOWPOS_UNDEFINED, width, height, 0);
     }
 
     if (!m_win) {
@@ -82,10 +83,6 @@ void SDLRenderWindow::update(uint32_t width, uint32_t height, uint8_t *y_plane, 
       SDL_DestroyWindow(m_win);
       //std::cerr << "Cound not create the SDL renderer" << std::endl;
       return;
-    }
-    if (m_screen_width == 0) {
-      m_screen_width = width;
-      m_screen_height = height;
     }
   }
 
@@ -103,8 +100,8 @@ void SDLRenderWindow::update(uint32_t width, uint32_t height, uint8_t *y_plane, 
 
   // Create the OSD class
   if (!m_osd) {
-    m_osd.reset(new SDLOSD(m_font_file, m_home_dir_icon, m_north_arrow_icon, m_renderer,
-			   m_telem, m_screen_width, m_screen_height));
+    m_osd.reset(new SDLOSD(m_font_file, m_home_dir_icon, m_north_arrow_icon, m_renderer, m_telem,
+			   width, height));
   }
 
   // Update the texture

@@ -34,13 +34,9 @@ make -j 3 install
 cd ..
 
 wget http://www.libsdl.org/projects/SDL_image/release/SDL2_image-2.0.2.tar.gz
-wget http://www.libsdl.org/projects/SDL_mixer/release/SDL2_mixer-2.0.2.tar.gz
-wget http://www.libsdl.org/projects/SDL_net/release/SDL2_net-2.0.1.tar.gz
 wget http://www.libsdl.org/projects/SDL_ttf/release/SDL2_ttf-2.0.14.tar.gz
 
 tar zxvf SDL2_image-2.0.2.tar.gz
-tar zxvf SDL2_mixer-2.0.2.tar.gz
-tar zxvf SDL2_net-2.0.1.tar.gz
 tar zxvf SDL2_ttf-2.0.14.tar.gz
 
 for D in SDL2_image-2.0.2 SDL2_mixer-2.0.2 SDL2_net-2.0.1 SDL2_ttf-2.0.14; do
@@ -48,6 +44,34 @@ for D in SDL2_image-2.0.2 SDL2_mixer-2.0.2 SDL2_net-2.0.1 SDL2_ttf-2.0.14; do
   ./autogen.sh
   ./configure --prefix=/home/webbb/sdl_build
   make -j 4 install
+  cd ..
+done
+~~~
+
+## Install SDL2 on Jetson Nano
+
+~~~
+sudo apt-get install libfreetype6-dev libv4l-dev
+
+mkdir build
+cd build
+
+wget https://www.libsdl.org/release/SDL2-2.0.9.tar.gz
+wget http://www.libsdl.org/projects/SDL_image/release/SDL2_image-2.0.4.tar.gz
+wget http://www.libsdl.org/projects/SDL_ttf/release/SDL2_ttf-2.0.15.tar.gz
+
+tar xvf SDL2-2.0.9.tar.gz
+tar zxvf SDL2_image-2.0.4.tar.gz
+tar zxvf SDL2_ttf-2.0.15.tar.gz
+
+cd SDL2-2.0.9
+CFLAGS="-O3 -DNDEBUG" ./configure --prefix=/home/webbb/sdl_build
+make -j 10 install
+
+for D in SDL2_image-2.0.4 SDL2_ttf-2.0.15; do
+  cd ${D}
+  CFLAGS="-O3 -DNDEBUG" ./configure --prefix=/home/webbb/sdl_build
+  make -j 10 install
   cd ..
 done
 ~~~
