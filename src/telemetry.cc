@@ -50,11 +50,12 @@ void Telemetry::reader_thread() {
 	case MAVLINK_MSG_ID_SYS_STATUS:
 	  mavlink_sys_status_t sys_status;
 	  mavlink_msg_sys_status_decode(&msg, &sys_status);
-	  //if (!m_rec_bat_status) {
-	  set_value("voltage_battery", sys_status.voltage_battery / 1000.0);
-	  set_value("current_battery", sys_status.current_battery);
-	  set_value("battery_remaining", sys_status.battery_remaining);
-	  //}
+	  if (!m_rec_bat_status) {
+	    set_value("voltage_battery", sys_status.voltage_battery / 1000.0);
+	    set_value("current_battery",
+		      std::max(sys_status.current_battery, static_cast<short>(0)) / 100.0);
+	    set_value("battery_remaining", sys_status.battery_remaining);
+	  }
 	  break;
 	case MAVLINK_MSG_ID_NAV_CONTROLLER_OUTPUT:
 	  mavlink_nav_controller_output_t nav;
@@ -129,12 +130,13 @@ void Telemetry::reader_thread() {
 	case MAVLINK_MSG_ID_BATTERY_STATUS:
 	  mavlink_battery_status_t bat;
 	  mavlink_msg_battery_status_decode(&msg, &bat);
-	  /*
-	  set_value("voltage_battery", bat.voltages[0] / 1000.0);
-	  set_value("current_battery", bat.current_battery);
-	  set_value("battery_remaining", bat.battery_remaining);
-	  m_rec_bat_status = true;
-	  */
+	  if (bat.voltages[0] != INT16_MAX) {
+	    set_value("voltage_battery", bat.voltages[0] / 1000.0);
+	    set_value("current_battery",
+		      std::max(bat.current_battery, static_cast<short>(0)) / 100.0);
+	    set_value("battery_remaining", bat.battery_remaining);
+	    m_rec_bat_status = true;
+	  }
 	  break;
 	case MAVLINK_MSG_ID_HOME_POSITION:
 	  mavlink_home_position_t home;
@@ -142,6 +144,10 @@ void Telemetry::reader_thread() {
 	  set_value("home_latitude", home.latitude * 1e-7);
 	  set_value("home_longitude", home.longitude * 1e-7);
 	  set_value("home_altitude", home.altitude);
+	  break;
+	case MAVLINK_MSG_ID_RC_CHANNELS_RAW:
+	  mavlink_rc_channels_raw_t rc_channels_raw;
+	  mavlink_msg_rc_channels_raw_decode(&msg, &rc_channels_raw);
 	  break;
 	default:
 	  std::cerr << "Received packet: SYS: " << int(msg.sysid)

@@ -181,11 +181,11 @@ void SDLOSD::update() {
     low_bat = (remain < 0.15);
   }
   if (low_bat) {
-    add_telemetry("battery_remaining", "%4.1f", "%", 0, 0, false, 255, 0, 0);
-    add_telemetry("voltage_battery", "%4.1f", "V", 0, 1, false, 255, 0, 0);
+    add_telemetry("voltage_battery", "%4.1f", "V", 0, 0, false, 255, 0, 0);
+    add_telemetry("battery_remaining", "%4.1f", "%", 0, 1, false, 255, 0, 0);
   } else {
-    add_telemetry("battery_remaining", "%4.1f", "%", 0, 0, false, 0, 255, 0);
-    add_telemetry("voltage_battery", "%4.1f", "V", 0, 1, false, 0, 255, 0);
+    add_telemetry("voltage_battery", "%4.1f", "V", 0, 0, false, 0, 255, 0);
+    add_telemetry("battery_remaining", "%4.1f", "%", 0, 1, false, 0, 255, 0);
   }
   add_telemetry("current_battery", "%4.1f", "A", 0, 2, false);
 
