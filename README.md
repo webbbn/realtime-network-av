@@ -23,27 +23,25 @@ mkdir build
 cd build
 sudo apt-get remove libsdl2-dev
 sudo apt-get autoremove -y
-sudo apt-get install libfontconfig-dev qt5-default automake mercurial libtool libfreeimage-dev libopenal-dev libpango1.0-dev libsndfile-dev libudev-dev libtiff5-dev libwebp-dev libasound2-dev libaudio-dev libxrandr-dev libxcursor-dev libxi-dev libxinerama-dev libxss-dev libesd0-dev freeglut3-dev libmodplug-dev libsmpeg-dev libjpeg-dev libpng-dev libdirectfb-dev libdirectfb-bin
+sudo apt-get install libfontconfig-dev qt5-default libfreeimage-dev libopenal-dev libpango1.0-dev libsndfile-dev libudev-dev libtiff5-dev libwebp-dev libasound2-dev libaudio-dev libxrandr-dev libxcursor-dev libxi-dev libxinerama-dev libxss-dev libesd0-dev freeglut3-dev libmodplug-dev libsmpeg-dev libjpeg-dev libpng-dev libdirectfb-dev libdirectfb-bin
 
-hg clone http://hg.libsdl.org/SDL
+wget https://www.libsdl.org/release/SDL2-2.0.9.tar.gz
+wget https://www.libsdl.org/projects/SDL_image/release/SDL2_image-2.0.4.tar.gz
+wget https://www.libsdl.org/projects/SDL_ttf/release/SDL2_ttf-2.0.15.tar.gz
 
-cd SDL
-./autogen.sh
-./configure --prefix=/home/webbb/sdl_build --disable-pulseaudio --disable-esd --disable-video-mir --disable-video-wayland --disable-video-opengl --enable-video-directfb --host=arm-raspberry-linux-gnueabihf
-make -j 3 install
+tar xvf SDL2-2.0.9.tar.gz
+tar xvf SDL2_image-2.0.4.tar.gz
+tar xvf SDL2_ttf-2.0.15.tar.gz
+
+cd SDL2-2.0.9
+CFLAGS="-O3 -DNDEBUG" ./configure --prefix=/home/webbb/realtime-network-av/build/sdl --disable-pulseaudio --disable-esd --disable-video-mir --disable-video-wayland --disable-video-opengl --disable-video-directfb --host=arm-raspberry-linux-gnueabihf
+make -j4 install
 cd ..
 
-wget http://www.libsdl.org/projects/SDL_image/release/SDL2_image-2.0.2.tar.gz
-wget http://www.libsdl.org/projects/SDL_ttf/release/SDL2_ttf-2.0.14.tar.gz
-
-tar zxvf SDL2_image-2.0.2.tar.gz
-tar zxvf SDL2_ttf-2.0.14.tar.gz
-
-for D in SDL2_image-2.0.2 SDL2_mixer-2.0.2 SDL2_net-2.0.1 SDL2_ttf-2.0.14; do
+for D in SDL2_image-2.0.4 SDL2_ttf-2.0.15; do
   cd ${D}
-  ./autogen.sh
-  ./configure --prefix=/home/webbb/sdl_build
-  make -j 4 install
+  CFLAGS="-O3 -DNDEBUG" ./configure --prefix=/home/webbb/realtime-network-av/build/sdl
+  make install
   cd ..
 done
 ~~~
@@ -82,6 +80,29 @@ sudo apt-get install libsdl2-dev libsdl2-image-dev libsdl2-ttf-dev
 
 # Compile the code
 
-cmake -DCMAKE_CXX_FLAGS="-O3 -DNDEBUG -std=c++11" -DCMAKE_PREFIX_PATH=/home/webbb/sdl_build -DCMAKE_INSTALL_PREFIX=/home/webbb/realtime-network-av/install ..
+cmake -DCMAKE_CXX_FLAGS="-O3 -DNDEBUG -std=c++11" -DCMAKE_PREFIX_PATH=/home/webbb/realtime-network-av/build/sdl/ -DCMAKE_INSTALL_PREFIX=/home/webbb/realtime-network-av/install ..
 make -j 4 install
 
+# Build v4l2rtspserver
+
+~~~
+git clone git@github.com:webbbn/v4l2rtspserver.git
+cd v4l2rtspserver
+~~~
+Edit v4l2rtspserver.service.in as necessary
+~~~
+mkdir build
+cd build
+sudo make install
+cmake ../..
+sudo systemctl enable v4l2rtspserver
+~~~
+
+# Install the telemetry forwarding script
+
+Edit ../python/vc_comm.py as appropriate
+~~~
+sudo cp ../python/fc_comm.py /usr/local/bin/
+sudo cp ../python/fc_comm.service /lib/systemd/system
+sudo systemctl enable fc_comm
+~~~

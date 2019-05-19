@@ -5,6 +5,9 @@ import serial
 import serial.threaded
 import time
 
+# /dev/ttyS0 for Raspberry Pi Zero W
+# /dev/ttyS1 for nanopi duo2
+serial_port = "/dev/ttyS0"
 
 class SerialToNet(serial.threaded.Protocol):
     """serial->socket"""
@@ -30,7 +33,6 @@ class SerialToNet(serial.threaded.Protocol):
 
 
 if __name__ == '__main__':
-    serial_port = "/dev/ttyS1"
     baudrate = 115200
     broadcast_port = 14550
     receive_port = 14551
