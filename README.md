@@ -106,3 +106,10 @@ sudo cp ../python/fc_comm.py /usr/local/bin/
 sudo cp ../python/fc_comm.service /lib/systemd/system
 sudo systemctl enable fc_comm
 ~~~
+
+# Install on Windows using msys2
+
+~~~
+pacman -S mingw64/mingw-w64-x86_64-cmake mingw64/mingw-w64-x86_64-gst-libav mingw64/mingw-w64-x86_64-SDL2_ttf mingw64/mingw-w64-x86_64-SDL2_image mingw64/mingw-w64-x86_64-SDL2 mingw64/mingw-w64-x86_64-boost pacman mingw64/mingw-w64-x86_64-gcc mingw64/mingw-w64-x86_64-ffmpeg make
+cmake -G "MSYS Makefiles" -DCMAKE_CXX_FLAGS="-O3 -DNDEBUG -std=c++11" -DCMAKE_PREFIX_PATH=c:/Users/webbb/projects/realtime-network-av/build/sdl/ -DCMAKE_INSTALL_PREFIX=c:/Users/webbb/projects/realtime-network-av/install ..
+~~~

@@ -3,6 +3,10 @@
 #include <stdio.h>
 #include <iostream>
 #include <functional>
+#include <fcntl.h>
+#include <io.h>
+
+#include <srt.h>
 
 #include <boost/program_options.hpp>
 #include <boost/asio.hpp>
@@ -31,6 +35,7 @@ int main(int argc, char* argv[]) {
   std::string port;
   uint32_t packet_size;
   bool use_udp;
+  bool use_srt;
   bool fullscreen;
   uint16_t screen;
   std::string url;
@@ -45,6 +50,7 @@ int main(int argc, char* argv[]) {
     ("packet_size", po::value<uint32_t>(&packet_size)->default_value(32767),
      "the size of the packet buffer (the maximum size of a packet)")
     ("use_udp,U", po::bool_switch(&use_udp), "use the UDP protocol rather than TCP")
+    ("use_srt,S", po::bool_switch(&use_srt), "use the SRT protocol rather than TCP/UDP")
     ("fullscreen,f", po::bool_switch(&fullscreen), "make the render window full screen")
     ("screen,s", po::value<uint16_t>(&screen), "the screen to display the video on")
     ("url,u", po::value<std::string>(&url), "read from the specified URL")
@@ -130,6 +136,69 @@ int main(int argc, char* argv[]) {
 	done |= check_for_quit();
       }
 
+    } else if (use_srt) {
+      int ss, st;
+      struct sockaddr_in sa;
+      int yes = 1;
+      struct sockaddr_storage their_addr;
+
+      // Initialize the SRT library
+      srt_startup();
+
+      // Create the SRT socket
+      ss = srt_create_socket();
+      if (ss == SRT_ERROR) {
+	fprintf(stderr, "srt_socket: %s\n", srt_getlasterror_str());
+	return 1;
+      }
+
+      // Set some socket options
+      SRT_TRANSTYPE tt = SRTT_FILE;
+      srt_setsockopt(ss, 0, SRTO_TRANSTYPE, &tt, sizeof tt);
+
+      // Ge the port info
+      sa.sin_family = AF_INET;
+      sa.sin_port = htons(atoi(port.c_str()));
+      if (inet_pton(AF_INET, hostname.c_str(), &sa.sin_addr) != 1) {
+        return 1;
+      }
+
+      srt_setsockflag(ss, SRTO_RCVSYN, &yes, sizeof yes);
+
+      // Bind to the port
+      st = srt_bind(ss, (struct sockaddr*)&sa, sizeof sa);
+      if (st == SRT_ERROR) {
+        fprintf(stderr, "srt_bind: %s\n", srt_getlasterror_str());
+        return 1;
+      }
+
+      // Listen for connection requests on this port
+      st = srt_listen(ss, 2);
+      if (st == SRT_ERROR) {
+        fprintf(stderr, "srt_listen: %s\n", srt_getlasterror_str());
+        return 1;
+      }
+
+      // Accept the connection.
+      int addr_size = sizeof their_addr;
+      int their_fd = srt_accept(ss, (struct sockaddr *)&their_addr, &addr_size);
+
+      // Process the received packets
+      bool done = false;
+      while (!done) {
+
+	size_t recv = srt_recvmsg(their_fd, reinterpret_cast<char*>(buffer), packet_size);
+
+	if (recv != SRT_ERROR) {
+	  done = !dec->decode(buffer, recv);
+	} else {
+	  std::cerr << "read error" << std::endl;
+	}
+
+	done |= check_for_quit();
+	  
+      }
+
     } else if (hostname.length() > 0) {
 
       ip::tcp::socket sock(io_context);
@@ -159,7 +228,6 @@ int main(int argc, char* argv[]) {
       while (!done) {
 	size_t recv = fread(buf, 1, 1024, stdin);
 	if (recv > 0) {
-	  std::cerr << "recv: " << recv << std::endl;
 	  done = !dec->decode(buffer, recv);
 	}
 	done |= check_for_quit();

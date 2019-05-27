@@ -5,7 +5,7 @@ from cpython cimport array
 from cpython.version cimport PY_MAJOR_VERSION
 from libc.string cimport memset
 
-cdef extern from 'netinet/in.h':
+cdef extern from 'netinet_in.h':
     struct sockaddr:
         pass
     struct in_addr:
@@ -29,7 +29,7 @@ cdef extern from 'netinet/in.h':
 
     int getaddrinfo(const char *node, const char *service, const addrinfo *hints, addrinfo **res)
 
-cdef extern from 'arpa/inet.h':
+cdef extern from 'arpa_inet.h':
     enum: AF_INET
     enum: SOCK_DGRAM
 
