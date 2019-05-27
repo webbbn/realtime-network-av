@@ -14,6 +14,7 @@ endif()
 
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3 -DNDEBUG")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -DNDEBUG")
+set(CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
 
 # We have submodule, so we need git to update the submodule
 find_package(Git QUIET)
@@ -61,6 +62,12 @@ endif (USE_OMX)
 
 # Add rtaudio to the list of directories to build
 add_subdirectory(modules/rtaudio)
+
+# Add srt to the list of directories to build
+add_subdirectory(modules/srt)
+
+# Add the python directory to the list of directories to build
+add_subdirectory(python)
 
 # Add the rtaudio directory to the paths
 include_directories("${PROJECT_SOURCE_DIR}/modules/rtaudio")
