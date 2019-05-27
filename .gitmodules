@@ -7,3 +7,6 @@
 [submodule "modules/rtaudio"]
 	path = modules/rtaudio
 	url = https://github.com/thestk/rtaudio.git
+[submodule "modules/srt"]
+	path = modules/srt
+	url = git@github.com:webbbn/srt.git
