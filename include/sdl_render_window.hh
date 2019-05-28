@@ -13,8 +13,8 @@ public:
 		  const std::string &font_file,
 		  const std::string &home_dir_icon,
 		  const std::string &north_arrow_icon,
-		  uint16_t screen,
-		  bool fullstcreen);
+		  uint32_t wx, uint32_t wy,
+		  uint16_t screen, bool fullscreen);
 
   ~SDLRenderWindow();
 
@@ -35,6 +35,8 @@ private:
   SDL_Texture *m_texture;
   uint32_t m_screen_width;
   uint32_t m_screen_height;
+  uint32_t m_win_x;
+  uint32_t m_win_y;
   bool m_fullscreen;
 };
 

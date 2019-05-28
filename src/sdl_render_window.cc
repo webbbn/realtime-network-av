@@ -9,11 +9,11 @@ SDLRenderWindow::SDLRenderWindow(std::shared_ptr<Telemetry> telem,
 				 const std::string &font_file,
 				 const std::string &home_dir_icon,
 				 const std::string &north_arrow_icon,
-				 uint16_t screen,
-				 bool fullscreen) :
+				 uint32_t wx, uint32_t wy,
+				 uint16_t screen, bool fullscreen) :
   m_telem(telem), m_font_file(font_file), m_home_dir_icon(home_dir_icon),
   m_north_arrow_icon(north_arrow_icon), m_screen(screen), m_win(0), m_renderer(0), m_texture(0),
-  m_fullscreen(fullscreen) {
+  m_win_x(wx), m_win_y(wy), m_fullscreen(fullscreen) {
 
   // Initialize SDL_ttf library
   if (TTF_Init() != 0) {
@@ -66,8 +66,7 @@ void SDLRenderWindow::update(uint32_t video_width, uint32_t video_height,
 				 SDL_WINDOWPOS_UNDEFINED, width, height, SDL_WINDOW_FULLSCREEN);
       }
     } else {
-	m_win = SDL_CreateWindow("Realtime Video Player", SDL_WINDOWPOS_UNDEFINED,
-				 SDL_WINDOWPOS_UNDEFINED, width, height, 0);
+      m_win = SDL_CreateWindow("Realtime Video Player", m_win_x, m_win_y, width, height, 0);
     }
 
     if (!m_win) {
@@ -99,7 +98,7 @@ void SDLRenderWindow::update(uint32_t video_width, uint32_t video_height,
   }
 
   // Create the OSD class
-  if (!m_osd) {
+  if (!m_osd && m_telem) {
     m_osd.reset(new SDLOSD(m_font_file, m_home_dir_icon, m_north_arrow_icon, m_renderer, m_telem,
 			   width, height));
   }
@@ -109,12 +108,16 @@ void SDLRenderWindow::update(uint32_t video_width, uint32_t video_height,
   SDL_UpdateYUVTexture(m_texture, NULL, y_plane, width, u_plane, uv_pitch, v_plane, uv_pitch);
 
   // Update the OSD textures
-  m_osd->update();
+  if (m_osd) {
+    m_osd->update();
+  }
 
   // Render the texture
   SDL_RenderClear(m_renderer);
   SDL_RenderCopy(m_renderer, m_texture, NULL, NULL);
   // Draw the OSD textures
-  m_osd->draw();
+  if (m_osd) {
+    m_osd->draw();
+  }
   SDL_RenderPresent(m_renderer);
 }

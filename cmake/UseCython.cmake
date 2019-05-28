@@ -15,7 +15,7 @@ macro(cython_add_module name)
   add_custom_command(
     OUTPUT ${name}.cpp
     COMMAND ${CYTHON}
-    ARGS -I ${CYTHON_INCLUDE_DIRECTORIES} -o ${name}.cpp ${CMAKE_CURRENT_SOURCE_DIR}/${name}.pyx
+    ARGS -3 -I ${CYTHON_INCLUDE_DIRECTORIES} -o ${name}.cpp ${CMAKE_CURRENT_SOURCE_DIR}/${name}.pyx
     DEPENDS ${name}.pyx
     COMMENT "Cython source")
   add_library(${name} MODULE ${name}.cpp ${ARGN})

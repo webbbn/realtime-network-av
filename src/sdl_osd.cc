@@ -7,7 +7,7 @@
 
 // Draw everything based on a screen size of 1080p and scale it to the actual screen size.
 static const uint16_t g_canonical_screen_width = 1920;
-static const uint8_t g_font_size = 25;
+static const uint8_t g_font_size = 35;
 static const uint8_t g_line_size = static_cast<uint8_t>(g_font_size * 1.25);
 static const uint8_t g_text_border_width = 2;
 static const char *g_mode_strings[] = {

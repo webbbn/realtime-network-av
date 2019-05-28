@@ -31,10 +31,12 @@ bool check_for_quit() {
 
 int main(int argc, char* argv[]) {
   std::string hostname;
-  std::string port;
+  uint16_t port;
   uint32_t packet_size;
   bool use_udp;
   bool use_srt;
+  uint32_t win_x;
+  uint32_t win_y;
   bool fullscreen;
   uint16_t screen;
   std::string url;
@@ -45,11 +47,15 @@ int main(int argc, char* argv[]) {
   desc.add_options()
     ("help", "produce help message")
     ("hostname,h", po::value<std::string>(&hostname), "name or IP address of the video server")
-    ("port,p", po::value<std::string>(&port), "port number of the video server")
+    ("port,p", po::value<uint16_t>(&port)->default_value(0), "port number of the video server")
     ("packet_size", po::value<uint32_t>(&packet_size)->default_value(32767),
      "the size of the packet buffer (the maximum size of a packet)")
     ("use_udp,U", po::bool_switch(&use_udp), "use the UDP protocol rather than TCP")
     ("use_srt,S", po::bool_switch(&use_srt), "use the SRT protocol rather than TCP/UDP")
+    ("win_x", po::value<uint32_t>(&win_x)->default_value(SDL_WINDOWPOS_UNDEFINED),
+     "the X component of the starting location of the window")
+    ("win_y", po::value<uint32_t>(&win_y)->default_value(SDL_WINDOWPOS_UNDEFINED),
+     "the Y component of the starting location of the window")
     ("fullscreen,f", po::bool_switch(&fullscreen), "make the render window full screen")
     ("screen,s", po::value<uint16_t>(&screen), "the screen to display the video on")
     ("url,u", po::value<std::string>(&url), "read from the specified URL")
@@ -92,10 +98,11 @@ int main(int argc, char* argv[]) {
   ip::tcp::resolver tcp_resolver(io_context);
 
   // Create the telemetry class
-  std::shared_ptr<Telemetry> telem(new Telemetry(io_context, tx));
+  //std::shared_ptr<Telemetry> telem(new Telemetry(io_context, tx));
+  std::shared_ptr<Telemetry> telem;
 
   // Create the class for rendering everything
-  SDLRenderWindow win(telem, font_file, home_dir_icon, north_arrow_icon, screen, fullscreen);
+  SDLRenderWindow win(telem, font_file, home_dir_icon, north_arrow_icon, win_x, win_y, screen, fullscreen);
 
   // Create the draw callback
   auto draw_cb = [&win](uint32_t width, uint32_t height,
@@ -120,8 +127,7 @@ int main(int argc, char* argv[]) {
     uint8_t *buffer = new uint8_t[packet_size];
 
     if (use_udp) {
-      boost::asio::ip::udp::endpoint listen_endpoint(boost::asio::ip::address_v4::any(),
-						     atoi(port.c_str()));
+      boost::asio::ip::udp::endpoint listen_endpoint(boost::asio::ip::address_v4::any(), port);
       ip::udp::socket sock(io_context, listen_endpoint);
       sock.set_option(boost::asio::socket_base::broadcast(true));
 
@@ -129,7 +135,7 @@ int main(int argc, char* argv[]) {
       while (!done) {
 	boost::asio::ip::udp::endpoint sender_endpoint;
 	size_t recv = sock.receive_from(boost::asio::buffer(buffer, packet_size), sender_endpoint);
-	if (recv > 0) {
+	if (recv) {
 	  done = !dec->decode(buffer, recv);
 	}
 	done |= check_for_quit();
@@ -157,7 +163,7 @@ int main(int argc, char* argv[]) {
 
       // Ge the port info
       sa.sin_family = AF_INET;
-      sa.sin_port = htons(atoi(port.c_str()));
+      sa.sin_port = htons(port);
       if (inet_pton(AF_INET, hostname.c_str(), &sa.sin_addr) != 1) {
         return 1;
       }
@@ -171,55 +177,61 @@ int main(int argc, char* argv[]) {
         return 1;
       }
 
-      // Listen for connection requests on this port
-      st = srt_listen(ss, 2);
-      if (st == SRT_ERROR) {
-        fprintf(stderr, "srt_listen: %s\n", srt_getlasterror_str());
-        return 1;
-      }
-
-      // Accept the connection.
-      int addr_size = sizeof their_addr;
-      int their_fd = srt_accept(ss, (struct sockaddr *)&their_addr, &addr_size);
-
-      // Process the received packets
       bool done = false;
       while (!done) {
 
-	size_t recv = srt_recvmsg(their_fd, reinterpret_cast<char*>(buffer), packet_size);
-
-	if (recv != SRT_ERROR) {
-	  done = !dec->decode(buffer, recv);
-	} else {
-	  std::cerr << "read error" << std::endl;
+	// Listen for connection requests on this port
+	st = srt_listen(ss, 2);
+	if (st == SRT_ERROR) {
+	  fprintf(stderr, "srt_listen: %s\n", srt_getlasterror_str());
+	  return 1;
 	}
 
-	done |= check_for_quit();
-	  
+	// Accept the connection.
+	std::cout << "Waiting for a connection" << std::endl;
+	int addr_size = sizeof their_addr;
+	int their_fd = srt_accept(ss, (struct sockaddr *)&their_addr, &addr_size);
+	std::cout << "Received a connection" << std::endl;
+
+	// Process the received packets
+	while (!done) {
+
+	  size_t recv = srt_recvmsg(their_fd, reinterpret_cast<char*>(buffer), packet_size);
+
+	  if (recv != SRT_ERROR) {
+	    done = !dec->decode(buffer, recv);
+	  } else {
+	    break;
+	  }
+
+	  done |= check_for_quit();
+	}
       }
 
-    } else if (hostname.length() > 0) {
+    } else if (port > 0) {
 
-      ip::tcp::socket sock(io_context);
-#if BOOST_VERSION < 106600
-      boost::asio::connect(sock, tcp_resolver.resolve({hostname, port}));
-#else
-      boost::asio::connect(sock, tcp_resolver.resolve(hostname, port));
-#endif
-
+      ip::tcp::acceptor acceptor(io_context, ip::tcp::endpoint(ip::tcp::v4(), port));
       bool done = false;
       while (!done) {
-	boost::system::error_code ec;
-	size_t recv = boost::asio::read(sock, boost::asio::buffer(buffer, packet_size),
-					boost::asio::transfer_at_least(1), ec);
-	if (ec) {
-	  std::cerr << "Read error" << std::endl;
-	} else {
-	  done = !dec->decode(buffer, recv);
-	}
+	ip::tcp::socket sock(io_context);
+	std::cout << "Waiting for a connection" << std::endl;
+	acceptor.accept(sock);
+	std::cout << "Received a connection" << std::endl;
+	bool done = false;
+	while (!done) {
+	  boost::system::error_code ec;
+	  size_t recv = boost::asio::read(sock, boost::asio::buffer(buffer, packet_size),
+					  boost::asio::transfer_at_least(1), ec);
+	  if (!ec) {
+	    done = !dec->decode(buffer, recv);
+	  } else {
+	    break;
+	  }
 
-	done |= check_for_quit();
+	  done |= check_for_quit();
+	}
       }
+
     } else {
       uint8_t buf[1024];
 

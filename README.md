@@ -113,3 +113,25 @@ sudo systemctl enable fc_comm
 pacman -S mingw64/mingw-w64-x86_64-cmake mingw64/mingw-w64-x86_64-gst-libav mingw64/mingw-w64-x86_64-SDL2_ttf mingw64/mingw-w64-x86_64-SDL2_image mingw64/mingw-w64-x86_64-SDL2 mingw64/mingw-w64-x86_64-boost pacman mingw64/mingw-w64-x86_64-gcc mingw64/mingw-w64-x86_64-ffmpeg make
 cmake -G "MSYS Makefiles" -DCMAKE_CXX_FLAGS="-O3 -DNDEBUG -std=c++11" -DCMAKE_PREFIX_PATH=c:/Users/webbb/projects/realtime-network-av/build/sdl/ -DCMAKE_INSTALL_PREFIX=c:/Users/webbb/projects/realtime-network-av/install ..
 ~~~
+
+# Install pi3d
+
+## Install pi3d on Windows
+
+*Derived from:* http://pi3d.github.io/html/ReadMe.html#windows
+*With DLLs from:* https://github.com/paddywwoof/pi3d_windll
+
+Create a new python virtualenv (from an msys2 shell using standard windows python 3.X)
+~~~
+py -m venv env
+.\env\Scripts\activate
+py -m pip install --upgrade pip
+pip install --upgrade setup tools
+~~~
+Install pi3d and dependencies
+~~~
+pip install numpy
+pip install pillow
+pip install pygame
+pip install pi3d
+~~~
