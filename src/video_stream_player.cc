@@ -4,7 +4,6 @@
 #include <iostream>
 #include <functional>
 #include <fcntl.h>
-#include <io.h>
 
 #include <srt.h>
 

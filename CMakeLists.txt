@@ -103,6 +103,7 @@ find_library(SDL2_IMAGE_LIBRARY SDL2_image)
 include_directories(${PROJECT_SOURCE_DIR}/modules/mavlink/common)
 
 include_directories(${SDL2_INCLUDE_DIRS} ${PROJECT_SOURCE_DIR}/modules/srt/srtcore ${PROJECT_SOURCE_DIR}/modules/srt/common ${PROJECT_BINARY_DIR}/modules/srt)
+link_directories(${PROJECT_BINARY_DIR})
 add_executable(video_stream_player
   src/video_stream_player.cc
   src/telemetry.cc
@@ -111,7 +112,6 @@ add_executable(video_stream_player
   src/sdl_osd.cc
   src/sdl_render_window.cc
   src/transmitter.cc)
-link_directories(${PROJECT_BINARY_DIR})
 target_link_libraries(video_stream_player ${AVCODEC_LIBRARY} ${AVFORMAT_LIBRARY} ${AVUTIL_LIBRARY} ${SWSCALE_LIBRARY} ${SDL2_LIBRARIES} ${SDL2_TTF_LIBRARY} ${SDL2_IMAGE_LIBRARY} ${Boost_LIBRARIES} ${Extra_Libraries} srt)
 install(TARGETS video_stream_player DESTINATION bin)
 

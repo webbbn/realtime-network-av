@@ -101,7 +101,6 @@ def create_socket():
     # Create the socket
     sock = srt_create_socket();
     if sock == SRT_ERROR:
-        print("Error creating the SRT socket")
         return 0
 
     # Set some socket options
@@ -126,7 +125,7 @@ def wait_for_connect(sock, host, port):
     cdef sockaddr_in sa
     sa.sin_family = AF_INET;
     sa.sin_port = htons(port);
-    st = inet_pton(AF_INET, host, &sa.sin_addr)
+    st = inet_pton(AF_INET, host.encode("utf-8"), &sa.sin_addr)
     if st != 1:
         print("Error parsing host name")
         return 0
@@ -157,7 +156,7 @@ def connect(sock, host, port):
     sa.sin_family = AF_INET;
     sa.sin_port = htons(port);
     cdef hbytes
-    st = inet_pton(AF_INET, host, &sa.sin_addr)
+    st = inet_pton(AF_INET, host.encode("utf-8"), &sa.sin_addr)
     if st != 1:
         print("Error parsing host name")
         return -1
@@ -165,7 +164,6 @@ def connect(sock, host, port):
     # Connect to the specified host/port
     st = srt_connect(sock, <sockaddr*>&sa, sizeof(sa))
     if st == SRT_ERROR:
-        print("Error connecting to the server")
         return False
     return True
 
