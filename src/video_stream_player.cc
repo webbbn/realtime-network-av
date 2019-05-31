@@ -15,6 +15,7 @@
 #include "ffmpeg_decoder.hh"
 #include "sdl_render_window.hh"
 #include "transmitter.hh"
+#include "fec.h"
 
 namespace po=boost::program_options;
 namespace ip=boost::asio::ip;
@@ -35,14 +36,16 @@ int main(int argc, char* argv[]) {
   uint32_t packet_size;
   bool use_udp;
   bool use_srt;
+  bool use_fec;
+  uint16_t data_per_fec_block;
+  uint16_t fec_per_fec_block;
   uint32_t win_x;
   uint32_t win_y;
   bool fullscreen;
   uint16_t screen;
   std::string url;
   std::string font_file;
-  std::string home_dir_icon;
-  std::string north_arrow_icon;
+  std::string image_dir;
   po::options_description desc("Allowed options");
   desc.add_options()
     ("help", "produce help message")
@@ -50,20 +53,24 @@ int main(int argc, char* argv[]) {
     ("port,p", po::value<uint16_t>(&port)->default_value(0), "port number of the video server")
     ("packet_size", po::value<uint32_t>(&packet_size)->default_value(32767),
      "the size of the packet buffer (the maximum size of a packet)")
+    ("fec,f", po::bool_switch(&use_fec),
+     "the packets have been encoded with forward error correction")
+    ("data_per_block,b", po::value<uint16_t>(&data_per_fec_block)->default_value(8),
+     "number of data packets per FEC block")
+    ("fec_per_block,,r", po::value<uint16_t>(&fec_per_fec_block)->default_value(4),
+     "number of FEC packets per FEC block")
     ("use_udp,U", po::bool_switch(&use_udp), "use the UDP protocol rather than TCP")
     ("use_srt,S", po::bool_switch(&use_srt), "use the SRT protocol rather than TCP/UDP")
     ("win_x", po::value<uint32_t>(&win_x)->default_value(SDL_WINDOWPOS_UNDEFINED),
      "the X component of the starting location of the window")
     ("win_y", po::value<uint32_t>(&win_y)->default_value(SDL_WINDOWPOS_UNDEFINED),
      "the Y component of the starting location of the window")
-    ("fullscreen,f", po::bool_switch(&fullscreen), "make the render window full screen")
+    ("fullscreen,F", po::bool_switch(&fullscreen), "make the render window full screen")
     ("screen,s", po::value<uint16_t>(&screen), "the screen to display the video on")
     ("url,u", po::value<std::string>(&url), "read from the specified URL")
     ("font", po::value<std::string>(&font_file), "the path to the OSD font file")
-    ("home_dir_icon", po::value<std::string>(&home_dir_icon),
-     "the path to the home direction arrow icon file")
-    ("north_arrow_icon", po::value<std::string>(&north_arrow_icon),
-     "the path to the north direction arror icon file")
+    ("image_dir", po::value<std::string>(&image_dir),
+     "the path to the directory containing the OSD textures")
     ;
 
   po::variables_map vm;
@@ -98,11 +105,10 @@ int main(int argc, char* argv[]) {
   ip::tcp::resolver tcp_resolver(io_context);
 
   // Create the telemetry class
-  //std::shared_ptr<Telemetry> telem(new Telemetry(io_context, tx));
-  std::shared_ptr<Telemetry> telem;
+  std::shared_ptr<Telemetry> telem(new Telemetry(io_context, tx));
 
   // Create the class for rendering everything
-  SDLRenderWindow win(telem, font_file, home_dir_icon, north_arrow_icon, win_x, win_y, screen, fullscreen);
+  SDLRenderWindow win(telem, font_file, image_dir, win_x, win_y, screen, fullscreen);
 
   // Create the draw callback
   auto draw_cb = [&win](uint32_t width, uint32_t height,

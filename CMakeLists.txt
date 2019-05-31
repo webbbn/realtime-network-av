@@ -1,4 +1,4 @@
-# CMakeLists files in this project can
+# cmakelists files in this project can
 # refer to the root source directory of the project as ${HELLO_SOURCE_DIR} and
 # to the root binary directory of the project as ${HELLO_BINARY_DIR}.
 cmake_minimum_required(VERSION 2.8.11)
@@ -98,6 +98,7 @@ include_directories(${DCADEC_INCLUDE_DIR})
 find_package(SDL2)
 find_library(SDL2_TTF_LIBRARY SDL2_ttf)
 find_library(SDL2_IMAGE_LIBRARY SDL2_image)
+find_library(SDL2_GFX_LIBRARY SDL2_gfx)
 
 # Add the mavlink directory to the include path
 include_directories(${PROJECT_SOURCE_DIR}/modules/mavlink/common)
@@ -111,8 +112,9 @@ add_executable(video_stream_player
   src/ffmpeg_decoder.cc
   src/sdl_osd.cc
   src/sdl_render_window.cc
-  src/transmitter.cc)
-target_link_libraries(video_stream_player ${AVCODEC_LIBRARY} ${AVFORMAT_LIBRARY} ${AVUTIL_LIBRARY} ${SWSCALE_LIBRARY} ${SDL2_LIBRARIES} ${SDL2_TTF_LIBRARY} ${SDL2_IMAGE_LIBRARY} ${Boost_LIBRARIES} ${Extra_Libraries} srt)
+  src/transmitter.cc
+  src/fec.c)
+target_link_libraries(video_stream_player ${AVCODEC_LIBRARY} ${AVFORMAT_LIBRARY} ${AVUTIL_LIBRARY} ${SWSCALE_LIBRARY} ${SDL2_LIBRARIES} ${SDL2_TTF_LIBRARY} ${SDL2_IMAGE_LIBRARY} ${SDL2_GFX_LIBRARY} ${Boost_LIBRARIES} ${Extra_Libraries} srt)
 install(TARGETS video_stream_player DESTINATION bin)
 
 find_library(V4L_LIBRARY v4l2)

@@ -36,10 +36,13 @@ void Telemetry::reader_thread() {
   mavlink_status_t status;
   int max_length = 1024;
   uint8_t data[max_length];
+  bool messages_requested = false;
+
   while(1) {
     size_t length = m_recv_sock.receive_from(boost::asio::buffer(data, max_length), m_sender_endpoint);
     m_sender_valid = true;
 
+    bool heartbeat_received = false;
     for (size_t i = 0; i < length; ++i) {
       if (mavlink_parse_char(MAVLINK_COMM_0, data[i], &msg, &status)) {
 	m_sysid = msg.sysid;
@@ -74,6 +77,9 @@ void Telemetry::reader_thread() {
 	case MAVLINK_MSG_ID_ATTITUDE:
 	  mavlink_attitude_t att;
 	  mavlink_msg_attitude_decode(&msg, &att);
+	  set_value("roll", att.roll);
+	  set_value("pitch", att.pitch);
+	  set_value("yaw", att.yaw);
 	  break;
 	case MAVLINK_MSG_ID_STATUSTEXT:
 	  mavlink_statustext_t status;
@@ -94,15 +100,15 @@ void Telemetry::reader_thread() {
 	case MAVLINK_MSG_ID_VIBRATION:
 	  //std::cerr << "Vibration " << std::endl;
 	  break;
-	case MAVLINK_MSG_ID_HEARTBEAT:
-	  {
-	    mavlink_heartbeat_t hb;
-	    mavlink_msg_heartbeat_decode(&msg, &hb);
-	    bool is_armed = (hb.base_mode & 0x80);
-	    set_value("armed", is_armed ? 1.0 : 0.0);
-	    set_value("mode", static_cast<float>(hb.custom_mode));
-	  }
+	case MAVLINK_MSG_ID_HEARTBEAT: {
+	  mavlink_heartbeat_t hb;
+	  mavlink_msg_heartbeat_decode(&msg, &hb);
+	  bool is_armed = (hb.base_mode & 0x80);
+	  set_value("armed", is_armed ? 1.0 : 0.0);
+	  set_value("mode", static_cast<float>(hb.custom_mode));
+	  heartbeat_received = true;
 	  break;
+	}
 	case MAVLINK_MSG_ID_VFR_HUD:
 	  //std::cerr << "VFR HUD " << std::endl;
 	  break;
@@ -130,6 +136,7 @@ void Telemetry::reader_thread() {
 	case MAVLINK_MSG_ID_BATTERY_STATUS:
 	  mavlink_battery_status_t bat;
 	  mavlink_msg_battery_status_decode(&msg, &bat);
+/*
 	  if (bat.voltages[0] != INT16_MAX) {
 	    set_value("voltage_battery", bat.voltages[0] / 1000.0);
 	    set_value("current_battery",
@@ -137,6 +144,7 @@ void Telemetry::reader_thread() {
 	    set_value("battery_remaining", bat.battery_remaining);
 	    m_rec_bat_status = true;
 	  }
+*/
 	  break;
 	case MAVLINK_MSG_ID_HOME_POSITION:
 	  mavlink_home_position_t home;
@@ -158,6 +166,35 @@ void Telemetry::reader_thread() {
 	}
       }
     }
+
+    if (heartbeat_received && !messages_requested) {
+      const uint8_t MAVStreams[] = {
+				    MAV_DATA_STREAM_RAW_SENSORS,
+				    MAV_DATA_STREAM_EXTENDED_STATUS,
+				    MAV_DATA_STREAM_RC_CHANNELS,
+				    MAV_DATA_STREAM_POSITION,
+				    MAV_DATA_STREAM_EXTRA1,
+				    MAV_DATA_STREAM_EXTRA2,
+				    MAVLINK_MSG_ID_ATTITUDE,
+				    MAVLINK_MSG_ID_RADIO_STATUS
+      };
+      const uint16_t MAVRates[] = { 2, 5, 2, 5, 2, 2, 20, 2 };
+      uint8_t data[max_length];
+      for (size_t i = 0; i < sizeof(MAVStreams); ++i) {
+/*
+	int len = mavlink_msg_request_data_stream_pack(m_sysid, m_compid,
+						       reinterpret_cast<mavlink_message_t*>(data),
+						       1, 1, MAVStreams[i], MAVRates[i], 1);
+	m_send_sock.send_to(boost::asio::buffer(data, len), m_sender_endpoint);
+*/
+	int len = mavlink_msg_message_interval_pack(m_sysid, m_compid,
+						    reinterpret_cast<mavlink_message_t*>(data),
+						    MAVStreams[i], 1000000 / MAVRates[i]);
+	m_send_sock.send_to(boost::asio::buffer(data, len), m_sender_endpoint);
+      }
+      messages_requested = true;
+    }
+
   }
 }
 

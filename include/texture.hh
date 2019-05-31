@@ -30,7 +30,7 @@ public:
         
   //Renders texture at given point
   void render(int x, int y, SDL_Rect* clip = 0, double angle = 0.0, SDL_Point* center = NULL,
-	      SDL_RendererFlip flip = SDL_FLIP_NONE);
+	      uint8_t alphamod = 255, SDL_RendererFlip flip = SDL_FLIP_NONE);
 
   //Gets image dimensions
   int width();

@@ -3,6 +3,8 @@
 
 #include <boost/format.hpp>
 
+#include <SDL2/SDL2_gfxPrimitives.h>
+
 #include "sdl_osd.hh"
 
 // Draw everything based on a screen size of 1080p and scale it to the actual screen size.
@@ -31,10 +33,8 @@ static const char *g_mode_strings[] = {
   "Guided",    // guided mode but only accepts attitude and altitude
 };
 
-SDLOSD::SDLOSD(const std::string &font_file, const std::string &home_dir_icon,
-	       const std::string &north_arrow, SDL_Renderer *renderer,
-	       std::shared_ptr<Telemetry> telem,
-	       uint32_t display_width, uint32_t display_height) :
+SDLOSD::SDLOSD(const std::string &font_file, const std::string &image_dir, SDL_Renderer *renderer,
+	       std::shared_ptr<Telemetry> telem, uint32_t display_width, uint32_t display_height) :
   m_renderer(renderer), m_font(0), m_font_bg(0), m_units_font(0), m_units_font_bg(0),
   m_telem(telem) {
 
@@ -55,22 +55,49 @@ SDLOSD::SDLOSD(const std::string &font_file, const std::string &home_dir_icon,
     TTF_SetFontOutline(m_units_font_bg, m_text_border);
   }
 
-  // Load the home direction array.
+  // Load the home direction arrow.
   m_home_arrow = new Texture(m_renderer);
-  if (!m_home_arrow->load_from_file(home_dir_icon)) {
+  if (!m_home_arrow->load_from_file(image_dir + "/home-arrow.png")) {
     std::cerr << "Error loading the home direction arrow image" << std::endl
-	      << "  " << home_dir_icon << std::endl;
+	      << "  " << image_dir + "/home-arrow.png" << std::endl;
     delete m_home_arrow;
     m_home_arrow = 0;
   }
 
   // Load the north arrow
   m_north_arrow = new Texture(m_renderer);
-  if (!m_north_arrow->load_from_file(north_arrow)) {
+  if (!m_north_arrow->load_from_file(image_dir + "/north-arrow.png")) {
     std::cerr << "Error loading the north arrow image" << std::endl
-	      << "  " << north_arrow << std::endl;
+	      << "  " << image_dir + "/north-arrow.png" << std::endl;
     delete m_north_arrow;
     m_north_arrow = 0;
+  }
+
+  // Load the attitude forground texture.
+  m_attitude_fg = new Texture(m_renderer);
+  if (!m_attitude_fg->load_from_file(image_dir + "/attitude-foreground.png")) {
+    std::cerr << "Error loading the attitude foreground image" << std::endl
+	      << "  " << image_dir + "/attitude-foreground.png" << std::endl;
+    delete m_attitude_fg;
+    m_attitude_fg = 0;
+  }
+
+  // Load the attitude ground texture.
+  m_attitude_ground = new Texture(m_renderer);
+  if (!m_attitude_ground->load_from_file(image_dir + "/attitude-ground.png")) {
+    std::cerr << "Error loading the attitude ground image" << std::endl
+	      << "  " << image_dir + "/attitude-ground.png" << std::endl;
+    delete m_attitude_ground;
+    m_attitude_ground = 0;
+  }
+
+  // Load the attitude ring texture.
+  m_attitude_ring = new Texture(m_renderer);
+  if (!m_attitude_ring->load_from_file(image_dir + "/attitude-ring.png")) {
+    std::cerr << "Error loading the attitude ring image" << std::endl
+	      << "  " << image_dir + "/attitude-ring.png" << std::endl;
+    delete m_attitude_ring;
+    m_attitude_ring = 0;
   }
 
   // Scale the renderer based on a 1080p screen size
@@ -190,10 +217,10 @@ void SDLOSD::update() {
   add_telemetry("current_battery", "%4.1f", "A", 0, 2, false);
 
   // Draw the distance/speed text
-  add_telemetry("distance", "%6.2f", "km", -5, 0, false);
-  add_telemetry("speed", "%6.2f", "km/h", -5, 1, false);
-  add_telemetry("altitude", "%6.2f", "m", -5, 2, false);
-  add_telemetry("relative_altitude", "%6.2f", "m", -5, 3, false);
+  add_telemetry("distance", "%6.2f", "km", -21, 0, false);
+  add_telemetry("speed", "%6.2f", "km/h", -21, 1, false);
+  add_telemetry("altitude", "%6.2f", "m", 16, 0, false);
+  add_telemetry("relative_altitude", "%6.2f", "m", 16, 1, false);
 
   // Draw the armed/disarmed icon.
   float armed_val = 0;
@@ -221,19 +248,20 @@ void SDLOSD::update() {
   float min = (deg - static_cast<float>(deg_int)) * 60.0;
   int32_t min_int = static_cast<int32_t>(min);
   float sec = (min - static_cast<float>(min_int)) * 60.0;
-  add_text((deg < 0) ? "S" : "N", "", -10, -2, true);
-  add_text(str(boost::format("%2d") % abs(deg_int)), "o", -9, -2, true);
-  add_text(str(boost::format("%2d") % abs(min_int)), "'", -7, -2, true);
-  add_text(str(boost::format("%5.2f") % abs(sec)), "\"", -5, -2, true);
+  int8_t geo_x = -9;
+  add_text((deg < 0) ? "S" : "N", "", geo_x, -2, false);
+  add_text(str(boost::format("%3d") % abs(deg_int)), "o", geo_x + 1, -2, false);
+  add_text(str(boost::format("%2d") % abs(min_int)), "'", geo_x + 4, -2, false);
+  add_text(str(boost::format("%5.2f") % abs(sec)), "\"", geo_x + 6, -2, false);
   deg = std::max(std::min(longitude, 180.0F), -180.0F);
   deg_int = static_cast<int32_t>(deg);
   min = (deg - static_cast<float>(deg_int)) * 60.0;
   min_int = static_cast<int32_t>(min);
   sec = (min - static_cast<float>(min_int)) * 60.0;
-  add_text((deg < 0) ? "W" : "E", "", 2, -2, true);
-  add_text(str(boost::format("%2d") % abs(deg_int)), "o", 3, -2, true);
-  add_text(str(boost::format("%2d") % abs(min_int)), "'", 6, -2, true);
-  add_text(str(boost::format("%5.2f") % abs(sec)), "\"", 8, -2, true);
+  add_text((deg < 0) ? "W" : "E", "", geo_x, -1, false);
+  add_text(str(boost::format("%3d") % abs(deg_int)), "o", geo_x + 1, -1, false);
+  add_text(str(boost::format("%2d") % abs(min_int)), "'", geo_x + 4, -1, false);
+  add_text(str(boost::format("%5.2f") % abs(sec)), "\"", geo_x + 6, -1, false);
 }
 
 void SDLOSD::draw() {
@@ -250,16 +278,62 @@ void SDLOSD::draw() {
   if (m_home_arrow) {
     float home_direction = 0;
     m_telem->get_value("home_direction", home_direction);
-    m_home_arrow->render((g_canonical_screen_width - m_home_arrow->width()) / 2, 10, 0,
-			 home_direction);
+    m_home_arrow->render(1070, 25, 0, home_direction);
   }
 
   // Render the north arrow
   if (m_north_arrow) {
     float north_direction = 0;
     m_telem->get_value("heading", north_direction);
-    m_north_arrow->render((g_canonical_screen_width - m_north_arrow->width()) / 2,
-			  m_scaled_screen_height - m_north_arrow->height() - 40,
-			  0, 360.0 - north_direction);
+    m_north_arrow->render(750, 25, 0, 360.0 - north_direction);
   }
+
+  // Render the attitude indicator
+  uint16_t guage_width = m_attitude_fg->width();
+  uint16_t guage_height = m_attitude_fg->height();
+  uint16_t guage_y = 10;
+
+  // Render the sky background
+  float roll;
+  float pitch;
+  m_telem->get_value("roll", roll);
+  m_telem->get_value("pitch", pitch);
+  uint16_t horizon_x = g_canonical_screen_width / 2;
+  uint16_t horizon_radius = guage_width / 2 - 5;
+  uint16_t horizon_y = guage_y + guage_width / 2;
+  filledCircleRGBA(m_renderer, horizon_x, horizon_y, horizon_radius, 51, 150, 204, 128);
+
+  // Render the ground arc
+  SDL_Rect clip;
+  clip.x = 0;
+  clip.y = (m_attitude_ground->height() / 2.0) * std::min(1.0f, std::max(-1.0f, sin(pitch))) +
+    m_attitude_ground->height() / 2.0;
+  clip.w = m_attitude_ground->width();
+  clip.h = m_attitude_ground->height() - clip.y;
+  if (m_attitude_ground) {
+    m_attitude_ground->render((g_canonical_screen_width - m_attitude_ground->width()) / 2,
+			      guage_y + (guage_height - m_attitude_ground->height()) / 2,
+			      &clip, -roll * 180.0 / M_PI);
+  }
+
+  // Render the horizon line
+  //float th = acos(sin(pitch))
+  //float sa = th + pitch;
+
+  // Render the inner edge of the attitude display
+  if (m_attitude_ring) {
+    m_attitude_ring->render((g_canonical_screen_width - m_attitude_ring->width()) / 2,
+			      guage_y + (guage_height - m_attitude_ring->height()) / 2,
+			    0, -roll * 180.0 / M_PI, 0, 128);
+  }
+
+  // Render the attitude guage border
+  if (m_attitude_fg) {
+    m_attitude_fg->render((g_canonical_screen_width - m_attitude_fg->width()) / 2,
+			      guage_y + (guage_height - m_attitude_fg->height()) / 2,
+			  0, 0, 0, 128);
+  }
+
+  // Draw the lines on the attitude indicator
+  
 }

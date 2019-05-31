@@ -11,8 +11,7 @@ public:
 
   SDLRenderWindow(std::shared_ptr<Telemetry> telem,
 		  const std::string &font_file,
-		  const std::string &home_dir_icon,
-		  const std::string &north_arrow_icon,
+		  const std::string &image_dir,
 		  uint32_t wx, uint32_t wy,
 		  uint16_t screen, bool fullscreen);
 
@@ -26,8 +25,7 @@ public:
 private:
   std::shared_ptr<Telemetry> m_telem;
   std::string m_font_file;
-  std::string m_home_dir_icon;
-  std::string m_north_arrow_icon;
+  std::string m_image_dir;
   std::shared_ptr<SDLOSD> m_osd;
   uint16_t m_screen;
   SDL_Window *m_win;

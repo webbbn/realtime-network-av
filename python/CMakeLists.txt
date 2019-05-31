@@ -9,3 +9,8 @@ include_directories(${PYTHON_INCLUDE_PATH} ${PROJECT_SOURCE_DIR}/modules/srt/srt
 link_directories(${PROJECT_BINARY_DIR})
 cython_add_module(py_srt)
 target_link_libraries(py_srt srt ${PYTHON_LIBRARY} ${Extra_Libraries})
+
+set(PYFILES fc_comm.py pycamera_tx.py)
+
+install(TARGETS py_srt DESTINATION python)
+install(FILES fc_comm.py pycamera_tx.py DESTINATION python)

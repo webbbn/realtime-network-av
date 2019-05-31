@@ -69,18 +69,31 @@ void Texture::free() {
 }
 
 void Texture::render(int x, int y, SDL_Rect* clip, double angle, SDL_Point* center,
-		     SDL_RendererFlip flip) {
+		     uint8_t alphamod, SDL_RendererFlip flip) {
   // Set rendering space and render to screen
   SDL_Rect render_quad = { x, y, m_width, m_height };
 
   // Set clip rendering dimensions
   if (clip != NULL) {
+    render_quad.x += clip->x;
+    render_quad.y += clip->y;
     render_quad.w = clip->w;
     render_quad.h = clip->h;
   }
 
+  // Adjust the location to adjust for the expanded bounding box size after rotation
+  SDL_Point ac = { m_width / 2, m_height / 2 };
+  if (center) {
+    ac.x = center->x;
+    ac.y = center->y;
+  } else if (clip) {
+    ac.x -= clip->x;
+    ac.y -= clip->y;
+  }
+
   // Render to screen
-  SDL_RenderCopyEx(m_renderer, m_texture, clip, &render_quad, angle, center, flip);
+  SDL_SetTextureAlphaMod(m_texture, alphamod);
+  SDL_RenderCopyEx(m_renderer, m_texture, clip, &render_quad, angle, &ac, flip);
 }
 
 int Texture::width() {

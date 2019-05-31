@@ -10,10 +10,8 @@
 class SDLOSD {
 public:
 
-  SDLOSD(const std::string &font_file, const std::string &home_dir_icon,
-	 const std::string &north_arrow, SDL_Renderer *renderer,
-	 std::shared_ptr<Telemetry> telem,
-	 uint32_t display_width, uint32_t display_display_height);
+  SDLOSD(const std::string &font_file, const std::string &image_directory, SDL_Renderer *renderer,
+	 std::shared_ptr<Telemetry> telem, uint32_t display_width, uint32_t display_display_height);
 
   void update();
 
@@ -41,6 +39,9 @@ private:
   SDL_Renderer *m_renderer;
   Texture *m_home_arrow;
   Texture *m_north_arrow;
+  Texture *m_attitude_fg;
+  Texture *m_attitude_ground;
+  Texture *m_attitude_ring;
   TTF_Font *m_font;
   TTF_Font *m_font_bg;
   TTF_Font *m_units_font;

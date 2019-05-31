@@ -7,13 +7,11 @@
 
 SDLRenderWindow::SDLRenderWindow(std::shared_ptr<Telemetry> telem,
 				 const std::string &font_file,
-				 const std::string &home_dir_icon,
-				 const std::string &north_arrow_icon,
+				 const std::string &image_dir,
 				 uint32_t wx, uint32_t wy,
 				 uint16_t screen, bool fullscreen) :
-  m_telem(telem), m_font_file(font_file), m_home_dir_icon(home_dir_icon),
-  m_north_arrow_icon(north_arrow_icon), m_screen(screen), m_win(0), m_renderer(0), m_texture(0),
-  m_win_x(wx), m_win_y(wy), m_fullscreen(fullscreen) {
+  m_telem(telem), m_font_file(font_file), m_image_dir(image_dir), m_screen(screen),
+  m_win(0), m_renderer(0), m_texture(0), m_win_x(wx), m_win_y(wy), m_fullscreen(fullscreen) {
 
   // Initialize SDL_ttf library
   if (TTF_Init() != 0) {
@@ -99,8 +97,8 @@ void SDLRenderWindow::update(uint32_t video_width, uint32_t video_height,
 
   // Create the OSD class
   if (!m_osd && m_telem) {
-    m_osd.reset(new SDLOSD(m_font_file, m_home_dir_icon, m_north_arrow_icon, m_renderer, m_telem,
-			   width, height));
+    std::cerr << "aaa\n";
+    m_osd.reset(new SDLOSD(m_font_file, m_image_dir, m_renderer, m_telem, width, height));
   }
 
   // Update the texture
