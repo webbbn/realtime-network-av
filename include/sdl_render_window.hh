@@ -13,7 +13,7 @@ public:
 		  const std::string &font_file,
 		  const std::string &image_dir,
 		  uint32_t wx, uint32_t wy,
-		  uint16_t screen, bool fullscreen);
+		  uint8_t screen, bool windowed);
 
   ~SDLRenderWindow();
 
@@ -27,7 +27,7 @@ private:
   std::string m_font_file;
   std::string m_image_dir;
   std::shared_ptr<SDLOSD> m_osd;
-  uint16_t m_screen;
+  int16_t m_screen;
   SDL_Window *m_win;
   SDL_Renderer *m_renderer;
   SDL_Texture *m_texture;
@@ -35,7 +35,7 @@ private:
   uint32_t m_screen_height;
   uint32_t m_win_x;
   uint32_t m_win_y;
-  bool m_fullscreen;
+  bool m_windowed;
 };
 
 #endif /* RTNAV_SDL_RENDER_WINDOW_HH */

@@ -29,7 +29,9 @@ public:
   bool decode(unsigned char *pData, size_t sz);
 
   bool decode_url();
-  
+
+  void get_frame(uint8_t *y_plane, uint8_t *u_plane, uint8_t *v_plane);
+
 private:
   AVCodec *m_codec;
   AVCodecContext  *m_codec_ctx;

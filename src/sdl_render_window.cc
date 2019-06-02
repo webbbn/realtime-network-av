@@ -9,9 +9,9 @@ SDLRenderWindow::SDLRenderWindow(std::shared_ptr<Telemetry> telem,
 				 const std::string &font_file,
 				 const std::string &image_dir,
 				 uint32_t wx, uint32_t wy,
-				 uint16_t screen, bool fullscreen) :
+				 uint8_t screen, bool windowed) :
   m_telem(telem), m_font_file(font_file), m_image_dir(image_dir), m_screen(screen),
-  m_win(0), m_renderer(0), m_texture(0), m_win_x(wx), m_win_y(wy), m_fullscreen(fullscreen) {
+  m_win(0), m_renderer(0), m_texture(0), m_win_x(wx), m_win_y(wy), m_windowed(windowed) {
 
   // Initialize SDL_ttf library
   if (TTF_Init() != 0) {
@@ -48,23 +48,36 @@ void SDLRenderWindow::update(uint32_t video_width, uint32_t video_height,
 			     uint8_t *y_plane, uint8_t *u_plane, uint8_t *v_plane) {
   uint32_t width = video_width;
   uint32_t height = video_height;
+  uint32_t win_width = video_width;
+  uint32_t win_height = video_height;
 
   // Create the playback window.
   if (!m_win) {
 
-    if (m_fullscreen) {
-      if (SDL_GetNumVideoDisplays() >= m_screen) {
+    if (m_windowed) {
+      m_win = SDL_CreateWindow("Realtime Video Player", m_win_x, m_win_y, width, height, 0);
+    } else {
+      uint8_t nscreens = SDL_GetNumVideoDisplays();
+      // If the screen is not specified and there's more than one screen, default to the second.
+      if (m_screen == 0) {
+	if (nscreens > 1) {
+	  m_screen = 2;
+	} else {
+	  m_screen = 1;
+	}
+      }
+      if (nscreens >= m_screen) {
 	SDL_Rect bounds;
 	SDL_GetDisplayBounds(m_screen - 1, &bounds);
 	m_win = SDL_CreateWindow("Realtime Video Player",
 				 bounds.x, bounds.y, bounds.w, bounds.h,
 				 SDL_WINDOW_BORDERLESS);
+	win_width = bounds.w;
+	win_height = bounds.h;
       } else {
 	m_win = SDL_CreateWindow("Realtime Video Player", SDL_WINDOWPOS_UNDEFINED,
 				 SDL_WINDOWPOS_UNDEFINED, width, height, SDL_WINDOW_FULLSCREEN);
       }
-    } else {
-      m_win = SDL_CreateWindow("Realtime Video Player", m_win_x, m_win_y, width, height, 0);
     }
 
     if (!m_win) {
@@ -97,8 +110,7 @@ void SDLRenderWindow::update(uint32_t video_width, uint32_t video_height,
 
   // Create the OSD class
   if (!m_osd && m_telem) {
-    std::cerr << "aaa\n";
-    m_osd.reset(new SDLOSD(m_font_file, m_image_dir, m_renderer, m_telem, width, height));
+    m_osd.reset(new SDLOSD(m_font_file, m_image_dir, m_renderer, m_telem, win_width, win_height));
   }
 
   // Update the texture

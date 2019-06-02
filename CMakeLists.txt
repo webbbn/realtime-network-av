@@ -8,6 +8,7 @@ option(USE_OMX "Build programs that use the OMX library on Raspberry Pi" OFF)
 
 if (WIN32)
   set(Extra_Libraries "ws2_32")
+  set(MSYS_DIR "c:/msys64/mingw64")
 else()
   set(Extra_Libraries "pthread")
 endif()
@@ -57,7 +58,7 @@ if (USE_OMX)
   link_directories("/opt/vc/lib")
   add_executable(rpi-camera-server src/rpi-camera-server.c)
   target_link_libraries(rpi-camera-server openmaxil bcm_host vcos pthread)
-  install(TARGETS rpi-camera-server DESTINATION bin)
+  install(TARGETS rpi-camera-server DESTINATION bin COMPONENT applications)
 endif (USE_OMX)
 
 # Add rtaudio to the list of directories to build
@@ -74,13 +75,13 @@ include_directories("${PROJECT_SOURCE_DIR}/modules/rtaudio")
 link_directories("${PROJECT_SOURCE_DIR}/modules/rtaudio")
 
 # Find the boost libraries
-find_package(Boost REQUIRED COMPONENTS program_options system)
+find_package(Boost REQUIRED COMPONENTS program_options system filesystem)
 include_directories(${Boost_INCLUDE_DIR})
 
 # Build the udp_audio server
 add_executable(udp_audio_player src/udp_audio_player.cc)
 target_link_libraries(udp_audio_player rtaudio ${Extra_Libraries} ${Boost_LIBRARIES})
-install(TARGETS udp_audio_player DESTINATION bin)
+install(TARGETS udp_audio_player DESTINATION bin COMPONENT applications)
 
 add_subdirectory(modules/dcadec)
 
@@ -115,14 +116,14 @@ add_executable(video_stream_player
   src/transmitter.cc
   src/fec.c)
 target_link_libraries(video_stream_player ${AVCODEC_LIBRARY} ${AVFORMAT_LIBRARY} ${AVUTIL_LIBRARY} ${SWSCALE_LIBRARY} ${SDL2_LIBRARIES} ${SDL2_TTF_LIBRARY} ${SDL2_IMAGE_LIBRARY} ${SDL2_GFX_LIBRARY} ${Boost_LIBRARIES} ${Extra_Libraries} srt)
-install(TARGETS video_stream_player DESTINATION bin)
+install(TARGETS video_stream_player DESTINATION bin COMPONENT applications)
 
 find_library(V4L_LIBRARY v4l2)
 if (V4L_LIBRARY)
   add_executable(v4l_h264_server
     src/v4l_h264_server.cc)
   target_link_libraries(v4l_h264_server ${V4L_LIBRARY} ${Boost_LIBRARIES} ${Extra_Libraries})
-  install(TARGETS v4l_h264_server DESTINATION bin)
+  install(TARGETS v4l_h264_server DESTINATION bin COMPONENT applications)
 endif (V4L_LIBRARY)
 
 find_package(ALSA)
@@ -131,7 +132,7 @@ if (ALSA_FOUND)
   add_executable(spdif_to_udp src/spdif_to_udp.cc)
   link_directories(modules/dcadec)
   target_link_libraries(spdif_to_udp dcadec asound ${Boost_LIBRARIES})
-  install(TARGETS spdif_to_udp DESTINATION bin)
+  install(TARGETS spdif_to_udp DESTINATION bin COMPONENT applications)
 endif ()
 
 find_library(OPENMAXIL_LIBRARY openmaxil HINT /opt/vc/lib)
@@ -148,6 +149,155 @@ if (OPENMAXIL_LIBRARY)
   link_directories(/opt/vc/lib)
   add_executable(rpi_video_player src/rpi_video_player.cc src/ilclient.c src/ilcore.c)
   target_link_libraries(rpi_video_player ${OPENMAXIL_LIBRARY} ${BRCMGLES_LIBRARY} ${BRCMEGL_LIBRARY} ${OPENMAXIL_LIBRARY} ${BCM_HOST_LIBRARY} ${VCOS_LIBRARY} ${VCHIQ_LIBRARY} ${Extra_Libraries})
-  install(TARGETS rpi_video_player DESTINATION bin)
+  install(TARGETS rpi_video_player DESTINATION bin COMPONENT applications)
 endif ()
 
+# Install the icons
+install(FILES "${PROJECT_SOURCE_DIR}/icons/attitude-background.png" DESTINATION icons COMPONENT icons)
+install(FILES "${PROJECT_SOURCE_DIR}/icons/attitude-foreground.png" DESTINATION icons COMPONENT icons)
+install(FILES "${PROJECT_SOURCE_DIR}/icons/attitude-ground.png" DESTINATION icons COMPONENT icons)
+install(FILES "${PROJECT_SOURCE_DIR}/icons/attitude-ring.png" DESTINATION icons COMPONENT icons)
+install(FILES "${PROJECT_SOURCE_DIR}/icons/home-arrow.png" DESTINATION icons COMPONENT icons)
+install(FILES "${PROJECT_SOURCE_DIR}/icons/north-arrow.png" DESTINATION icons COMPONENT icons)
+
+# Install the font files
+install(FILES "${PROJECT_SOURCE_DIR}/fonts/Cousine-Bold.ttf" DESTINATION fonts COMPONENT fonts)
+install(FILES "${PROJECT_SOURCE_DIR}/fonts/Cousine-BoldItalic.ttf" DESTINATION fonts COMPONENT fonts)
+install(FILES "${PROJECT_SOURCE_DIR}/fonts/Cousine-Italic.ttf" DESTINATION fonts COMPONENT fonts)
+install(FILES "${PROJECT_SOURCE_DIR}/fonts/Cousine-Regular.ttf" DESTINATION fonts COMPONENT fonts)
+
+# Create a windows installer
+if (WIN32)
+ 
+  # Install the dependent dlls to the bin directory
+  install(FILES "${MSYS_DIR}/bin/libwinpthread-1.dll" DESTINATION bin COMPONENT dlls)
+  install(FILES "${MSYS_DIR}/bin/libgcc_s_seh-1.dll" DESTINATION bin COMPONENT dlls)
+  install(FILES "${MSYS_DIR}/bin/avcodec-58.dll" DESTINATION bin COMPONENT dlls)
+  install(FILES "${MSYS_DIR}/bin/libstdc++-6.dll" DESTINATION bin COMPONENT dlls)
+  install(FILES "${MSYS_DIR}/bin/avformat-58.dll" DESTINATION bin COMPONENT dlls)
+  install(FILES "${MSYS_DIR}/bin/avutil-56.dll" DESTINATION bin COMPONENT dlls)
+  install(FILES "${MSYS_DIR}/bin/libboost_program_options-mt.dll" DESTINATION bin COMPONENT dlls)
+  install(FILES "${MSYS_DIR}/bin/SDL2.dll" DESTINATION bin COMPONENT dlls)
+  install(FILES "${MSYS_DIR}/bin/libSDL2_gfx-1-0-0.dll" DESTINATION bin COMPONENT dlls)
+  install(FILES "${MSYS_DIR}/bin/SDL2_image.dll" DESTINATION bin COMPONENT dlls)
+  install(FILES "${MSYS_DIR}/bin/SDL2_ttf.dll" DESTINATION bin COMPONENT dlls)
+  install(FILES "${MSYS_DIR}/bin/swscale-5.dll" DESTINATION bin COMPONENT dlls)
+  install(FILES "${MSYS_DIR}/bin/libbz2-1.dll" DESTINATION bin COMPONENT dlls)
+  install(FILES "${MSYS_DIR}/bin/libgnutls-30.dll" DESTINATION bin COMPONENT dlls)
+  install(FILES "${MSYS_DIR}/bin/libcelt0-2.dll" DESTINATION bin COMPONENT dlls)
+  install(FILES "${MSYS_DIR}/bin/libgsm.dll" DESTINATION bin COMPONENT dlls)
+  install(FILES "${MSYS_DIR}/bin/libiconv-2.dll" DESTINATION bin COMPONENT dlls)
+  install(FILES "${MSYS_DIR}/bin/libmfx-1.dll" DESTINATION bin COMPONENT dlls)
+  install(FILES "${MSYS_DIR}/bin/liblzma-5.dll" DESTINATION bin COMPONENT dlls)
+  install(FILES "${MSYS_DIR}/bin/libmp3lame-0.dll" DESTINATION bin COMPONENT dlls)
+  install(FILES "${MSYS_DIR}/bin/libopencore-amrnb-0.dll" DESTINATION bin COMPONENT dlls)
+  install(FILES "${MSYS_DIR}/bin/libopencore-amrwb-0.dll" DESTINATION bin COMPONENT dlls)
+  install(FILES "${MSYS_DIR}/bin/libmodplug-1.dll" DESTINATION bin COMPONENT dlls)
+  install(FILES "${MSYS_DIR}/bin/librtmp-1.dll" DESTINATION bin COMPONENT dlls)
+  install(FILES "${MSYS_DIR}/bin/zlib1.dll" DESTINATION bin COMPONENT dlls)
+  install(FILES "${MSYS_DIR}/bin/libopenjp2-7.dll" DESTINATION bin COMPONENT dlls)
+  install(FILES "${MSYS_DIR}/bin/libopus-0.dll" DESTINATION bin COMPONENT dlls)
+  install(FILES "${MSYS_DIR}/bin/libspeex-1.dll" DESTINATION bin COMPONENT dlls)
+  install(FILES "${MSYS_DIR}/bin/libtheoradec-1.dll" DESTINATION bin COMPONENT dlls)
+  install(FILES "${MSYS_DIR}/bin/libtheoraenc-1.dll" DESTINATION bin COMPONENT dlls)
+  install(FILES "${MSYS_DIR}/bin/libvorbis-0.dll" DESTINATION bin COMPONENT dlls)
+  install(FILES "${MSYS_DIR}/bin/libvorbisenc-2.dll" DESTINATION bin COMPONENT dlls)
+  install(FILES "${MSYS_DIR}/bin/libbluray-2.dll" DESTINATION bin COMPONENT dlls)
+  install(FILES "${MSYS_DIR}/bin/libpng16-16.dll" DESTINATION bin COMPONENT dlls)
+  install(FILES "${MSYS_DIR}/bin/libjpeg-8.dll" DESTINATION bin COMPONENT dlls)
+  install(FILES "${MSYS_DIR}/bin/libtiff-5.dll" DESTINATION bin COMPONENT dlls)
+  install(FILES "${MSYS_DIR}/bin/libvpx-1.dll" DESTINATION bin COMPONENT dlls)
+  install(FILES "${MSYS_DIR}/bin/libwavpack-1.dll" DESTINATION bin COMPONENT dlls)
+  install(FILES "${MSYS_DIR}/bin/libwebp-7.dll" DESTINATION bin COMPONENT dlls)
+  install(FILES "${MSYS_DIR}/bin/libwebpmux-3.dll" DESTINATION bin COMPONENT dlls)
+  install(FILES "${MSYS_DIR}/bin/libwebpdemux-2.dll" DESTINATION bin COMPONENT dlls)
+  install(FILES "${MSYS_DIR}/bin/libwebpdecoder-3.dll" DESTINATION bin COMPONENT dlls)
+  install(FILES "${MSYS_DIR}/bin/libx265.dll" DESTINATION bin COMPONENT dlls)
+  install(FILES "${MSYS_DIR}/bin/xvidcore.dll" DESTINATION bin COMPONENT dlls)
+  install(FILES "${MSYS_DIR}/bin/swresample-3.dll" DESTINATION bin COMPONENT dlls)
+  install(FILES "${MSYS_DIR}/bin/libx264-157.dll" DESTINATION bin COMPONENT dlls)
+  install(FILES "${MSYS_DIR}/bin/libfreetype-6.dll" DESTINATION bin COMPONENT dlls)
+  install(FILES "${MSYS_DIR}/bin/libcrypto-1_1-x64.dll" DESTINATION bin COMPONENT dlls)
+  install(FILES "${MSYS_DIR}/bin/libfreetype-6.dll" DESTINATION bin COMPONENT dlls)
+  install(FILES "${MSYS_DIR}/bin/libgmp-10.dll" DESTINATION bin COMPONENT dlls)
+  install(FILES "${MSYS_DIR}/bin/libxml2-2.dll" DESTINATION bin COMPONENT dlls)
+  install(FILES "${MSYS_DIR}/bin/libhogweed-4.dll" DESTINATION bin COMPONENT dlls)
+  install(FILES "${MSYS_DIR}/bin/libnettle-6.dll" DESTINATION bin COMPONENT dlls)
+  install(FILES "${MSYS_DIR}/bin/libogg-0.dll" DESTINATION bin COMPONENT dlls)
+  install(FILES "${MSYS_DIR}/bin/libzstd.dll" DESTINATION bin COMPONENT dlls)
+  install(FILES "${MSYS_DIR}/bin/libharfbuzz-0.dll" DESTINATION bin COMPONENT dlls)
+  install(FILES "${MSYS_DIR}/bin/libglib-2.0-0.dll" DESTINATION bin COMPONENT dlls)
+  install(FILES "${MSYS_DIR}/bin/libgraphite2.dll" DESTINATION bin COMPONENT dlls)
+  install(FILES "${MSYS_DIR}/bin/libintl-8.dll" DESTINATION bin COMPONENT dlls)
+  install(FILES "${MSYS_DIR}/bin/libidn2-0.dll" DESTINATION bin COMPONENT dlls)
+  install(FILES "${MSYS_DIR}/bin/libpcre-1.dll" DESTINATION bin COMPONENT dlls)
+  install(FILES "${MSYS_DIR}/bin/libp11-kit-0.dll" DESTINATION bin COMPONENT dlls)
+  install(FILES "${MSYS_DIR}/bin/libtasn1-6.dll" DESTINATION bin COMPONENT dlls)
+  install(FILES "${MSYS_DIR}/bin/libunistring-2.dll" DESTINATION bin COMPONENT dlls)
+  install(FILES "${MSYS_DIR}/bin/libffi-6.dll" DESTINATION bin COMPONENT dlls)
+  install(FILES "${MSYS_DIR}/bin/libboost_filesystem-mt.dll" DESTINATION bin COMPONENT dlls)
+  install(FILES "${PROJECT_BINARY_DIR}/libsrt.dll" DESTINATION bin COMPONENT dlls)
+
+  set(CPACK_PACKAGE_NAME "FPV-NG")
+  set(CPACK_PACKAGE_VENDOR "Me")
+  set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "FPV")
+  set(CPACK_PACKAGE_VERSION "0.1.0")
+  set(CPACK_PACKAGE_VERSION_MAJOR "0")
+  set(CPACK_PACKAGE_VERSION_MINOR "1")
+  set(CPACK_PACKAGE_VERSION_PATCH "0")
+  set(CPACK_PACKAGE_INSTALL_DIRECTORY "FPV-NG")
+
+  # Define components and their display names
+  set(CPACK_COMPONENTS_ALL applications libraries dlls headers icons fonts)
+  set(CPACK_COMPONENT_APPLICATIONS_DISPLAY_NAME "FPV-NG Applications")
+  set(CPACK_COMPONENT_LIBRARIES_DISPLAY_NAME "Libraries")
+  set(CPACK_COMPONENT_DLLS_DISPLAY_NAME "DLLs")
+  set(CPACK_COMPONENT_HEADERS_DISPLAY_NAME "C++ Headers")
+  set(CPACK_COMPONENT_ICONS_DISPLAY_NAME "Icons")
+  set(CPACK_COMPONENT_FONTS_DISPLAY_NAME "Fonts")
+
+  # Human readable component descriptions
+  set(CPACK_COMPONENT_APPLICATIONS_DESCRIPTION
+    "An extremely useful application that makes use of FPV-NG")
+  set(CPACK_COMPONENT_LIBRARIES_DESCRIPTION
+    "Static libraries used to build programs with FPV-NG")
+  set(CPACK_COMPONENT_DLLS_DESCRIPTION
+    "Shared libraries used to build programs with FPV-NG")
+  set(CPACK_COMPONENT_HEADERS_DESCRIPTION
+    "C/C++ header files for use with FPV-NG")
+  set(CPACK_COMPONENT_ICONS_DESCRIPTION
+    "Icon image files for use with FPV-NG")
+  set(CPACK_COMPONENT_FONTS_DESCRIPTION
+    "Font files for use with FPV-NG")
+
+  # Define dependencies between components
+  set(CPACK_COMPONENT_HEADERS_DEPENDS libraries)
+  set(CPACK_COMPONENT_APPLICATIONS_DEPENDS dlls icons fonts)
+
+  # Define groups
+  set(CPACK_COMPONENT_APPLICATIONS_GROUP "Runtime")
+  set(CPACK_COMPONENT_DLLS_GROUP "Runtime")
+  set(CPACK_COMPONENT_ICONS_GROUP "Runtime")
+  set(CPACK_COMPONENT_FONTS_GROUP "Runtime")
+  set(CPACK_COMPONENT_LIBRARIES_GROUP "Development")
+  set(CPACK_COMPONENT_HEADERS_GROUP "Development")
+
+  set(CPACK_COMPONENT_GROUP_DEVELOPMENT_DESCRIPTION
+    "All of the tools you'll ever need to develop software")
+
+  # Define NSIS installation types
+  set(CPACK_ALL_INSTALL_TYPES Full Developer)
+  set(CPACK_COMPONENT_LIBRARIES_INSTALL_TYPES Developer Full)
+  set(CPACK_COMPONENT_HEADERS_INSTALL_TYPES Developer Full)
+  set(CPACK_COMPONENT_APPLICATIONS_INSTALL_TYPES Full)
+  set(CPACK_COMPONENT_DLLS_INSTALL_TYPES Full)
+  set(CPACK_COMPONENT_ICONS_INSTALL_TYPES Full)
+  set(CPACK_COMPONENT_FONTS_INSTALL_TYPES Full)
+
+  # Add the list of executables taht will be linked onto the start menu
+  set(CPACK_PACKAGE_EXECUTABLES "video_stream_player;FPV Viewer")
+
+  # Must be after the last CPACK macros
+  include(CPack)
+
+endif ()

@@ -8,8 +8,8 @@
 #include "sdl_osd.hh"
 
 // Draw everything based on a screen size of 1080p and scale it to the actual screen size.
-static const uint16_t g_canonical_screen_width = 1920;
-static const uint8_t g_font_size = 35;
+static const uint16_t g_canonical_screen_width = 1280;
+static const uint8_t g_font_size = 20;
 static const uint8_t g_line_size = static_cast<uint8_t>(g_font_size * 1.25);
 static const uint8_t g_text_border_width = 2;
 static const char *g_mode_strings[] = {
@@ -100,7 +100,7 @@ SDLOSD::SDLOSD(const std::string &font_file, const std::string &image_dir, SDL_R
     m_attitude_ring = 0;
   }
 
-  // Scale the renderer based on a 1080p screen size
+  // Scale the renderer based on a canonical screen size
   float scale = static_cast<float>(display_width) / g_canonical_screen_width;
   SDL_RenderSetScale(m_renderer, scale, scale);
   m_num_lines = static_cast<uint8_t>((display_height / scale) / g_line_size);
@@ -248,7 +248,7 @@ void SDLOSD::update() {
   float min = (deg - static_cast<float>(deg_int)) * 60.0;
   int32_t min_int = static_cast<int32_t>(min);
   float sec = (min - static_cast<float>(min_int)) * 60.0;
-  int8_t geo_x = -9;
+  int8_t geo_x = -10;
   add_text((deg < 0) ? "S" : "N", "", geo_x, -2, false);
   add_text(str(boost::format("%3d") % abs(deg_int)), "o", geo_x + 1, -2, false);
   add_text(str(boost::format("%2d") % abs(min_int)), "'", geo_x + 4, -2, false);
@@ -262,6 +262,9 @@ void SDLOSD::update() {
   add_text(str(boost::format("%3d") % abs(deg_int)), "o", geo_x + 1, -1, false);
   add_text(str(boost::format("%2d") % abs(min_int)), "'", geo_x + 4, -1, false);
   add_text(str(boost::format("%5.2f") % abs(sec)), "\"", geo_x + 6, -1, false);
+
+  // Draw the sender IP address
+
 }
 
 void SDLOSD::draw() {
@@ -274,18 +277,20 @@ void SDLOSD::draw() {
   m_text_textures.clear();
   m_text_rects.clear();
 
-  // Render the home arrow
-  if (m_home_arrow) {
-    float home_direction = 0;
-    m_telem->get_value("home_direction", home_direction);
-    m_home_arrow->render(1070, 25, 0, home_direction);
-  }
-
   // Render the north arrow
   if (m_north_arrow) {
     float north_direction = 0;
     m_telem->get_value("heading", north_direction);
-    m_north_arrow->render(750, 25, 0, 360.0 - north_direction);
+    m_north_arrow->render(g_canonical_screen_width / 2 - 170 - m_north_arrow->width() / 2,
+			  25, 0, 360.0 - north_direction);
+  }
+
+  // Render the home arrow
+  if (m_home_arrow) {
+    float home_direction = 0;
+    m_telem->get_value("home_direction", home_direction);
+    m_home_arrow->render(g_canonical_screen_width / 2 + 170 - m_home_arrow->width() / 2,
+ 25, 0, home_direction);
   }
 
   // Render the attitude indicator
@@ -330,7 +335,7 @@ void SDLOSD::draw() {
   // Render the attitude guage border
   if (m_attitude_fg) {
     m_attitude_fg->render((g_canonical_screen_width - m_attitude_fg->width()) / 2,
-			      guage_y + (guage_height - m_attitude_fg->height()) / 2,
+			  guage_y + (guage_height - m_attitude_fg->height()) / 2,
 			  0, 0, 0, 128);
   }
 

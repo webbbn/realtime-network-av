@@ -3,7 +3,8 @@
 #include "ffmpeg_decoder.hh"
 
 FFMpegDecoder::FFMpegDecoder(AVCodecID decoder, DrawCallback cb) :
-   m_parser(0), m_format_ctx(0), m_sws_ctx(0), m_draw(cb) {
+   m_parser(0), m_format_ctx(0), m_sws_ctx(0), m_y_plane(0), m_u_plane(0), m_v_plane(0),
+   m_draw(cb) {
 
   av_register_all();
 

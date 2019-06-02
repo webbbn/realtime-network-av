@@ -8,7 +8,8 @@
 
 #include "transmitter.hh"
 
-struct Telemetry {
+class Telemetry {
+public:
 #if BOOST_VERSION < 106600
   typedef boost::asio::io_service io_context;
 #else
@@ -21,6 +22,10 @@ struct Telemetry {
 
   bool armed() const;
   void armed(bool val);
+
+  bool connected() const;
+
+  const boost::asio::ip::udp::endpoint &sender_endpoint();
 
 private:
   typedef std::map<std::string, float> NVMap;
@@ -39,6 +44,7 @@ private:
   boost::asio::ip::udp::endpoint m_sender_endpoint;
   bool m_sender_valid;
   bool m_rec_bat_status;
+  bool m_connected;
 };
 
 #endif /* RTNAV_TELEMETRY_HH */

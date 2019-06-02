@@ -11,7 +11,7 @@ Telemetry::Telemetry(io_context &io_context, Transmitter &tx) :
 							 14550)),
   m_send_sock(io_context, boost::asio::ip::udp::endpoint(boost::asio::ip::address_v4::any(),
 							 14551)),
-  m_tx(tx), m_sysid(0), m_compid(0), m_sender_valid(false), m_rec_bat_status(false) {
+  m_tx(tx), m_sysid(0), m_compid(0), m_rec_bat_status(false), m_connected(false) {
   m_recv_sock.set_option(boost::asio::socket_base::broadcast(true));
   m_send_sock.set_option(boost::asio::socket_base::broadcast(true));
   std::thread([this]() { this->reader_thread(); }).detach();
@@ -31,6 +31,14 @@ void Telemetry::set_value(const std::string &name, float value) {
   m_values[name] = value;
 }
 
+bool Telemetry::connected() const {
+  return m_connected;
+}
+
+const boost::asio::ip::udp::endpoint &Telemetry::sender_endpoint() {
+  return m_sender_endpoint;
+}
+
 void Telemetry::reader_thread() {
   mavlink_message_t msg;
   mavlink_status_t status;
@@ -40,7 +48,10 @@ void Telemetry::reader_thread() {
 
   while(1) {
     size_t length = m_recv_sock.receive_from(boost::asio::buffer(data, max_length), m_sender_endpoint);
-    m_sender_valid = true;
+    if (!m_connected) {
+      //set_value("ip_address", m_sender_endpoint.address().to_string());
+      m_connected = true;
+    }
 
     bool heartbeat_received = false;
     for (size_t i = 0; i < length; ++i) {
@@ -205,7 +216,7 @@ void Telemetry::control_thread() {
   bool done = false;
 
   // Don't send anything until we've recieved a packet.
-  while (!m_sender_valid) {
+  while (!m_connected) {
     std::this_thread::sleep_for(std::chrono::seconds(1));
   }
     
