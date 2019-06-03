@@ -104,7 +104,7 @@ find_library(SDL2_GFX_LIBRARY SDL2_gfx)
 # Add the mavlink directory to the include path
 include_directories(${PROJECT_SOURCE_DIR}/modules/mavlink/common)
 
-include_directories(${SDL2_INCLUDE_DIRS} ${PROJECT_SOURCE_DIR}/modules/srt/srtcore ${PROJECT_SOURCE_DIR}/modules/srt/common ${PROJECT_BINARY_DIR}/modules/srt)
+include_directories(${SDL2_INCLUDE_DIRS} ${PROJECT_SOURCE_DIR}/modules/srt/srtcore ${PROJECT_SOURCE_DIR}/modules/srt/common ${PROJECT_BINARY_DIR}/modules/srt ${PROJECT_BINARY_DIR}/sdl/include)
 link_directories(${PROJECT_BINARY_DIR})
 add_executable(video_stream_player
   src/video_stream_player.cc

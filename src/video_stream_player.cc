@@ -3,6 +3,9 @@
 #include <stdio.h>
 #include <iostream>
 #include <functional>
+#include <mutex>
+#include <thread>
+#include <condition_variable>
 #include <fcntl.h>
 
 #ifdef __WIN32

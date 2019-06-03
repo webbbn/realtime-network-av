@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import io
+import os
 import sys
 import socket
 import struct
@@ -8,6 +9,16 @@ import array
 import time
 import argparse
 import signal
+
+# Add the python directory to the python path
+root_dir = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+python_dir = os.path.join(root_dir, "python")
+sys.path.append(python_dir)
+lib_dir = os.path.join(root_dir, "lib")
+if "LD_LIBRARY_PATH" in os.environ:
+    os.environ["LD_LIBRARY_PATH"] = os.environ["LD_LIBRARY_PATH"] + ":" + lib_dir
+else:
+    os.environ["LD_LIBRARY_PATH"] = lib_dir
 
 import picamera
 import py_srt
@@ -88,15 +99,15 @@ class Camera(object):
         self.height = 720
         self.bitrate = 5000000
         self.fps = 30
-        self.intra_period = 30
+        self.intra_period = 3
         self.quality = 20
         self.inline_headers = True
 
         self.rec_width = 1920
         self.rec_height = 1080
-        self.rec_bitrate = 5000000
+        self.rec_bitrate = 25000000
         self.rec_intra_period = 30
-        self.rec_quality = 20
+        self.rec_quality = 30
         self.rec_inline_headers = True
 
         # Create the connection for streaming the data on
@@ -148,6 +159,7 @@ class Camera(object):
         # Initilize the camera parameters
         self.camera.resolution = (self.rec_width, self.rec_height)
         self.camera.framerate = self.fps
+        self.camera.awb_mode = 'sunlight'
 
         # Are we recording and streaming, or just streaming?
         if rec_filename:
@@ -160,7 +172,6 @@ class Camera(object):
         else:
             self.camera.start_recording(self.stream, format='h264', intra_period=self.intra_period,
                                         inline_headers=self.intra_period, bitrate=self.bitrate, quality=self.quality)
-        self.streaming = True;
 
     def wait_streaming(self, time):
         if self.camera:
