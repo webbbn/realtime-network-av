@@ -104,7 +104,7 @@ find_library(SDL2_GFX_LIBRARY SDL2_gfx)
 # Add the mavlink directory to the include path
 include_directories(${PROJECT_SOURCE_DIR}/modules/mavlink/common)
 
-include_directories(${SDL2_INCLUDE_DIRS} ${PROJECT_SOURCE_DIR}/modules/srt/srtcore ${PROJECT_SOURCE_DIR}/modules/srt/common ${PROJECT_BINARY_DIR}/modules/srt ${PROJECT_BINARY_DIR}/sdl/include)
+include_directories(${SDL2_INCLUDE_DIRS} ${SRT_SOURCE_DIR}/srtcore ${SRT_SOURCE_DIR}/common ${SRT_BINARY_DIR} ${PROJECT_BINARY_DIR}/sdl/include)
 link_directories(${PROJECT_BINARY_DIR})
 add_executable(video_stream_player
   src/video_stream_player.cc
@@ -115,7 +115,7 @@ add_executable(video_stream_player
   src/sdl_render_window.cc
   src/transmitter.cc
   src/fec.c)
-target_link_libraries(video_stream_player ${AVCODEC_LIBRARY} ${AVFORMAT_LIBRARY} ${AVUTIL_LIBRARY} ${SWSCALE_LIBRARY} ${SDL2_LIBRARIES} ${SDL2_TTF_LIBRARY} ${SDL2_IMAGE_LIBRARY} ${SDL2_GFX_LIBRARY} ${Boost_LIBRARIES} ${Extra_Libraries} srt)
+target_link_libraries(video_stream_player ${AVCODEC_LIBRARY} ${AVFORMAT_LIBRARY} ${AVUTIL_LIBRARY} ${SWSCALE_LIBRARY} ${SDL2_LIBRARIES} ${SDL2_TTF_LIBRARY} ${SDL2_IMAGE_LIBRARY} ${SDL2_GFX_LIBRARY} ${Boost_LIBRARIES} ${Extra_Libraries} ${TARGET_srt})
 install(TARGETS video_stream_player DESTINATION bin COMPONENT applications)
 
 find_library(V4L_LIBRARY v4l2)
