@@ -13,4 +13,4 @@ target_link_libraries(py_srt srt ${PYTHON_LIBRARY} ${Extra_Libraries})
 set(PYFILES fc_comm.py pycamera_tx.py)
 
 install(TARGETS py_srt DESTINATION python)
-install(PROGRAMS fc_comm.py pycamera_tx.py DESTINATION bin)
+install(PROGRAMS fc_comm.py pycamera_tx.py wifi_info.py DESTINATION bin)

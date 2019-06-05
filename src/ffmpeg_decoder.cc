@@ -40,10 +40,15 @@ FFMpegDecoder::FFMpegDecoder(const std::string &url, DrawCallback cb) :
   avformat_network_init();
 
   // Open the input stream.
-  //AVDictionary *opts = 0;
+  AVDictionary *opts = 0;
   //av_dict_set(&opts, "rtsp_transport", "tcp", 0);
+  //av_dict_set_int(&opts, "timeout", 10000000, 0);
+  av_dict_set_int(&opts, "stimeout", 1000000, 0);
+  av_dict_set_int(&opts, "rw_timeout", 1000000, 0);
+  av_dict_set_int(&opts, "reorder_queue_size", 1, 0);
+  av_dict_set(&opts, "rtsp_transport", "tcp", 0);
   //if (avformat_open_input(&m_format_ctx, url.c_str(), NULL, &opts) != 0) {
-  if (avformat_open_input(&m_format_ctx, url.c_str(), NULL, NULL) != 0) {
+  if (avformat_open_input(&m_format_ctx, url.c_str(), NULL, &opts) != 0) {
     std::cerr << "Error connecting to the server" << std::endl;
     exit(1);
   }
