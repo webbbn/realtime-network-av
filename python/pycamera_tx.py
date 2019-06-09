@@ -11,8 +11,6 @@ import argparse
 import signal
 import logging
 
-from format_as_table import format_as_table
-
 # Add the python directory to the python path
 root_dir = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
 python_dir = os.path.join(root_dir, "python")
@@ -25,12 +23,36 @@ else:
 
 using_picamera = False
 
+from format_as_table import format_as_table
 import py_srt
+
+class FPSLogger(object):
+
+    def __init__(self, frequency = 30):
+        self.frequency = frequency
+        self.count = 0;
+        self.fps = 0
+        self.bps = 0
+        self.prev_frame_time = time.time()
+
+    def log(self, frame_size):
+        frame_time = time.time()
+        frame_dur = (frame_time - self.prev_frame_time)
+        self.fps += 1.0 / frame_dur
+        self.bps += frame_size * 8.0 / frame_dur
+        self.count += 1
+        self.prev_frame_time = frame_time
+        if self.count == self.frequency:
+            logging.debug("fps: %f  Mbps: %6.3f" % (self.fps / self.count, 1e-6 * self.bps / self.count))
+            self.fps = 0;
+            self.bps = 0;
+            self.count = 0;
 
 class SRTOutputStream(object):
 
     def __init__(self, host, port, maxpacket = 1310):
         self.maxpacket = maxpacket
+        self.log = FPSLogger()
 
         # Create the communication socket
         self.sock = py_srt.create_socket()
@@ -44,12 +66,14 @@ class SRTOutputStream(object):
         py_srt.close(self.sock)
 
     def write(self, s):
+        self.log.log(len(s))
         for i in range(0, len(s), self.maxpacket):
             py_srt.sendmsg(self.sock, s[i : min(i + self.maxpacket, len(s))], ttl=250)
 
 class UDPOutputStream(object):
 
     def __init__(self, host, port, broadcast = False, maxpacket = 1310):
+        self.log = FPSLogger()
         self.broadcast = broadcast
         self.maxpacket = maxpacket
         self.host = host
@@ -61,6 +85,7 @@ class UDPOutputStream(object):
             self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
 
     def write(self, s):
+        self.log.log(len(s))
         if self.broadcast:
             host = '<broadcast>'
         else:
@@ -71,6 +96,7 @@ class UDPOutputStream(object):
 class TCPOutputStream(object):
 
     def __init__(self, host, port):
+        self.log = FPSLogger()
         self.host = host
         self.port = port
         self.conn = 0;
@@ -90,6 +116,7 @@ class TCPOutputStream(object):
             pass
 
     def write(self, s):
+        self.log.log(len(s))
         self.sock.send(s)
 
 class Camera(object):
@@ -178,6 +205,8 @@ class Camera(object):
                                             inline_headers=self.inline_headers, bitrate=self.bitrate, quality=self.quality,
                                             splitter_port=2, resize=(self.width, self.height))
             else:
+                print(self.bitrate)
+                print(self.quality)
                 self.camera.start_recording(self.stream, format='h264', intra_period=self.intra_period,
                                             inline_headers=self.intra_period, bitrate=self.bitrate, quality=self.quality)
         else:
@@ -188,25 +217,9 @@ class Camera(object):
 
             print(self.device)
             frame = Frame(self.device, self.width, self.height)
-            count = 0;
-            fps = 0
-            bps = 0
-            prev_frame_time = time.time()
             self.streaming = True
             while self.streaming:
                 frame_data = frame.get_frame()
-                frame_size = len(frame_data)
-                frame_time = time.time()
-                frame_dur = (frame_time - prev_frame_time)
-                fps += 1.0 / frame_dur
-                bps += frame_size * 8.0 / frame_dur
-                count += 1
-                prev_frame_time = frame_time
-                if count == 30:
-                    logging.debug("fps: %f  Mbps: %6.3f" % (fps / count, 1e-6 * bps / count))
-                    fps = 0;
-                    bps = 0;
-                    count = 0;
                 self.stream.write(frame_data)
 
     def wait_streaming(self, time):
@@ -272,8 +285,8 @@ if __name__ == '__main__':
     # Are we on an raspberry pi?
     try:
         import picamera
-        logging.Logger.debug("Loaded pycamera module")
-        using_picamera = true
+        logging.debug("Loaded pycamera module")
+        using_picamera = True
         logging.info("Using picamera to stream %dx%d/%d video to %s:%d at %f Mbps Using %s protocol " % (width, height, fps, host, port, bitrate, protocol))
 
     except:
