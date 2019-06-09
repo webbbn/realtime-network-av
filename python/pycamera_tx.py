@@ -9,6 +9,9 @@ import array
 import time
 import argparse
 import signal
+import logging
+
+from format_as_table import format_as_table
 
 # Add the python directory to the python path
 root_dir = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
@@ -20,7 +23,8 @@ if "LD_LIBRARY_PATH" in os.environ:
 else:
     os.environ["LD_LIBRARY_PATH"] = lib_dir
 
-import picamera
+using_picamera = False
+
 import py_srt
 
 class SRTOutputStream(object):
@@ -90,7 +94,7 @@ class TCPOutputStream(object):
 
 class Camera(object):
 
-    def __init__(self, protocol, host, port):
+    def __init__(self, protocol, host, port, device=False):
         self.streaming = False
         self.recording = False
 
@@ -110,14 +114,16 @@ class Camera(object):
         self.rec_quality = 30
         self.rec_inline_headers = True
 
+        self.device = device
+
         # Create the connection for streaming the data on
         if protocol == "SRT":
             self.stream = SRTOutputStream(host, port)
-        elif protocol == "UDP":
+        elif protocol.upper() == "UDP":
             self.stream = UDPOutputStream(host, port)
-        elif protocol == "UDPB":
+        elif protocol.upper() == "UDPB":
             self.stream = UDPOutputStream(host, port, broadcast=True)
-        elif protocol == "TCP":
+        elif protocol.upper() == "TCP":
             self.stream = TCPOutputStream(host, port)
         else:
             raise Exception("Invalid network protocol %s" % protocol)
@@ -154,73 +160,72 @@ class Camera(object):
             self.rec_height = self.height
 
         # Create the camera source
-        self.camera = picamera.PiCamera()
+        if using_picamera:
+            self.camera = picamera.PiCamera()
 
-        # Initilize the camera parameters
-        self.camera.resolution = (self.rec_width, self.rec_height)
-        self.camera.framerate = self.fps
-        self.camera.awb_mode = 'sunlight'
+            # Initilize the camera parameters
+            self.camera.resolution = (self.rec_width, self.rec_height)
+            self.camera.framerate = self.fps
+            self.camera.awb_mode = 'sunlight'
 
-        # Are we recording and streaming, or just streaming?
-        if rec_filename:
-            self.camera.start_recording(rec_filename, format='h264', intra_period=self.rec_intra_period,
-                                        inline_headers=self.rec_inline_headers, bitrate=self.rec_bitrate, quality=self.rec_quality)
-            self.camera.start_recording(self.stream, format='h264', intra_period=self.intra_period,
-                                        inline_headers=self.inline_headers, bitrate=self.bitrate, quality=self.quality,
-                                        splitter_port=2, resize=(self.width, self.height))
-            self.recording = True
+            # Are we recording and streaming, or just streaming?
+            self.streaming = True
+            if rec_filename:
+                self.recording = True
+                self.camera.start_recording(rec_filename, format='h264', intra_period=self.rec_intra_period,
+                                            inline_headers=self.rec_inline_headers, bitrate=self.rec_bitrate, quality=self.rec_quality)
+                self.camera.start_recording(self.stream, format='h264', intra_period=self.intra_period,
+                                            inline_headers=self.inline_headers, bitrate=self.bitrate, quality=self.quality,
+                                            splitter_port=2, resize=(self.width, self.height))
+            else:
+                self.camera.start_recording(self.stream, format='h264', intra_period=self.intra_period,
+                                            inline_headers=self.intra_period, bitrate=self.bitrate, quality=self.quality)
         else:
-            self.camera.start_recording(self.stream, format='h264', intra_period=self.intra_period,
-                                        inline_headers=self.intra_period, bitrate=self.bitrate, quality=self.quality)
+
+            # We're using V4L2
+            control = Control(self.device)
+            control.set_control_value(9963800, 2)
+
+            print(self.device)
+            frame = Frame(self.device, self.width, self.height)
+            count = 0;
+            fps = 0
+            bps = 0
+            prev_frame_time = time.time()
+            self.streaming = True
+            while self.streaming:
+                frame_data = frame.get_frame()
+                frame_size = len(frame_data)
+                frame_time = time.time()
+                frame_dur = (frame_time - prev_frame_time)
+                fps += 1.0 / frame_dur
+                bps += frame_size * 8.0 / frame_dur
+                count += 1
+                prev_frame_time = frame_time
+                if count == 30:
+                    logging.debug("fps: %f  Mbps: %6.3f" % (fps / count, 1e-6 * bps / count))
+                    fps = 0;
+                    bps = 0;
+                    count = 0;
+                self.stream.write(frame_data)
 
     def wait_streaming(self, time):
         if self.camera:
             self.camera.wait_recording(time)
 
     def stop_streaming(self):
-        if self.recording:
-            self.camera.stop_recording(splitter_port=2)
-        if self.streaming:
-            self.camera.stop_recording()
+        if using_picamera:
+            if self.recording:
+                self.camera.stop_recording(splitter_port=2)
+            if self.streaming:
+                self.camera.stop_recording()
         self.streaming = False
         self.recording = False
-
-        #udp_out = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
-        #udp_out.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-        #udp_out = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        #udp_out.connect(('192.168.1.38', 1234))
-        #udp_out_fd = udp_out.makefile('wb', 2000)
-        #print(udp_out_fd)
-
-        #tcp_out = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        #tcp_out.bind(('192.168.1.116', 1234))
-        #tcp_out.listen(1)
-        #print("accepting")
-        #conn, addr = tcp_out.accept()
-        #print("connected" + str(addr))
-
-        #tcp_out.connect(('192.168.1.38', 1234))
-        #connection = conn.makefile('wb')
-
-        # with picamera.PiCamera() as camera:
-
-        #     # Initialize the high-resolution stream and record to a file
-        #     camera.resolution = (1920, 1080)
-        #     camera.framerate = 30
-        #     camera.start_recording('highres.h264', format='h264', intra_period=30, inline_headers=True, bitrate=25000000, quality=20)
-
-        #     # Process the low-resolution stream in real time
-        #     camera.start_recording(OutputStream(), format='h264', intra_period=3, inline_headers=True, bitrate=5000000, quality=30, splitter_port=2, resize=(1280, 720))
-        #     #camera.start_recording('lowres.h264', splitter_port=2, resize=(800, 480))
-        #     #camera.start_recording('highres.h264')
-        #     #camera.start_recording(udp_out_fd, format='h264')
-        #     #camera.start_recording(sys.stdout, format='h264')
-        #     camera.wait_recording(60)
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("-v", "--verbose", help="increase output verbosity", action="store_true")
+    parser.add_argument("-l", "--loglevel", default="info", help="set output logging level (debug, info, warning, error, critical)")
     parser.add_argument("-sw", "--width", default=1280, help="the width of the transmitted video")
     parser.add_argument("-sh", "--height", default=720, help="the height of the transmitted video")
     parser.add_argument("-f", "--fps", default=30, help="the frames per second to sample the video at")
@@ -239,6 +244,14 @@ if __name__ == '__main__':
 
     # Parse the options
     args = parser.parse_args()
+
+    # Configure the logger
+    log_level = getattr(logging, args.loglevel.upper())
+    if not isinstance(log_level, int):
+        print("Invalid log level: %s - setting to info" % (args.loglevel))
+        log_level = logging.INFO
+    logging.basicConfig(level=log_level, format="%(asctime)s %(levelname)s: %(message)s", datefmt="%H:%M:%S")
+
     protocol = args.protocol
     width = int(args.width)
     height = int(args.height)
@@ -254,16 +267,52 @@ if __name__ == '__main__':
     output = args.output
     host = args.host
     port = int(args.port)
-    verbose = args.verbose
+    h264_device = False
 
-    if verbose :
-        print("Streaming %dx%d/%d video to %s:%d at %f Mbps Using %s protocol " %
-              (width, height, fps, host, port, bitrate, protocol))
+    # Are we on an raspberry pi?
+    try:
+        import picamera
+        logging.Logger.debug("Loaded pycamera module")
+        using_picamera = true
+        logging.info("Using picamera to stream %dx%d/%d video to %s:%d at %f Mbps Using %s protocol " % (width, height, fps, host, port, bitrate, protocol))
+
+    except:
+        # If not, use V4L2
+        import py_v4l2 as v4l
+        from py_v4l2 import Frame
+        from py_v4l2 import Control
+        logging.debug("Pycamera not found - using video4linux2 interface")
+
+        # Query the list of video devices
+        devices = v4l.get_devices()
+
+        # Try to find an H264 capable device
+        for device in devices:
+            logging.debug(device)
+            logging.debug("")
+
+            try:
+                control = Control(device)
+                controls = control.get_controls()
+                logging.debug(format_as_table(controls, controls[0].keys(), controls[0].keys(), 'name'))
+                formats = control.get_formats()
+                logging.debug(format_as_table(formats, formats[0].keys(), formats[0].keys(), 'format'))
+                for format in formats:
+                    if format["format"] == "H264" and format["width"] == args.rec_width and format["height"] == args.rec_height:
+                        logging.debug("Found requested format: %s - %dx%d on %s" % (format["format"], format["width"], format["height"], device))
+                        h264_device = device
+            except Exception as e:
+                logging.debug("Error reading controls/formats: " + str(e))
+        if h264_device == False:
+            logging.critical("No appropriate V4L2 device found")
+            exit(1)
+        logging.debug("Using " + h264_device)
+        logging.info("Streaming %dx%d video to %s:%d at %f Mbps Using %s protocol from %s" % (width, height, host, port, bitrate, protocol, h264_device))
 
     # Create the camera object
     global camera
     try:
-        camera = Camera(protocol, host, port)
+        camera = Camera(protocol, host, port, h264_device)
     except Exception as e:
         print(e)
         exit()
@@ -278,10 +327,11 @@ if __name__ == '__main__':
     if output:
         camera.recording_params(rec_width, rec_height, rec_bitrate, intra_period = rec_ip, quality = rec_q, inline_headers = True)
 
+    # Setup an exit handler to gracefully exit
+    signal.signal(signal.SIGINT, exit_handler)
+
     # Start streaming/recording
     camera.start_streaming(output)
-
-    signal.signal(signal.SIGINT, exit_handler)
 
     while(1):
         time.sleep(1);

@@ -10,7 +10,11 @@ link_directories(${PROJECT_BINARY_DIR})
 cython_add_module(py_srt)
 target_link_libraries(py_srt srt ${PYTHON_LIBRARY} ${Extra_Libraries})
 
+cython_add_module(py_v4l2)
+target_link_libraries(py_v4l2  ${PYTHON_LIBRARY} ${Extra_Libraries} v4l2)
+
 set(PYFILES fc_comm.py pycamera_tx.py)
 
-install(TARGETS py_srt DESTINATION python)
+install(TARGETS py_srt py_v4l2 DESTINATION python)
 install(PROGRAMS fc_comm.py pycamera_tx.py wifi_info.py DESTINATION bin)
+install(FILES format_as_table.py DESTINATION python)

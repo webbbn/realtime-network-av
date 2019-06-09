@@ -51,6 +51,7 @@
 #include <libv4l2.h>
 
 #include <iostream>
+#include <thread>
 
 #include <boost/asio.hpp>
 
@@ -60,7 +61,9 @@ typedef boost::asio::io_service io_context;
 typedef boost::asio::io_context io_context;
 #endif
 
+constexpr size_t g_packet_size =3000;
 bool g_done;
+std::thread *g_send_thread = 0;
 
 // Wrapper around v4l2_ioctl for programming the video device,
 // that automatically retries the USB request if something
@@ -89,9 +92,9 @@ void sig_handler(int s){
 
 // Change these to your liking...
 // or modify the program to take them cmd arguments!
-#define DEVICE_NAME "/dev/video1"
-#define FRAME_WIDTH 1280
-#define FRAME_HEIGHT 720
+#define DEVICE_NAME "/dev/video2"
+#define FRAME_WIDTH 1920
+#define FRAME_HEIGHT 1080
 
 // This determines the number of "working" buffers we
 // tell the device that it can use. I guess 3 is an OK
@@ -100,7 +103,7 @@ void sig_handler(int s){
 
 int main(int argc, char **argv) {
   namespace ip=boost::asio::ip;
-  int port = 62876;
+  int port = 1234;
 
   // Configure the signal handler to close gracefully
   struct sigaction sigIntHandler;
@@ -113,7 +116,7 @@ int main(int argc, char **argv) {
   io_context io_context;
 
   // Create the UDP socket
-  //ip::udp::socket sock(io_context, ip::udp::endpoint(ip::address_v4::any(), 62876));
+  //ip::udp::socket sock(io_context, ip::udp::endpoint(ip::address_v4::any(), 1234));
   //sock.set_option(boost::asio::socket_base::broadcast(true));
   ip::udp::socket sock(io_context);
   boost::system::error_code bs_error;
@@ -124,7 +127,7 @@ int main(int argc, char **argv) {
   }
 
   // Configure the UDP interfact to broadcast.
-  sock.set_option(ip::udp::socket::reuse_address(true));
+  //sock.set_option(ip::udp::socket::reuse_address(true));
   sock.set_option(boost::asio::socket_base::broadcast(true));
 
   // Create the broadcast endpoint to send to.
@@ -268,9 +271,24 @@ int main(int argc, char **argv) {
     // $ ffmpeg -f h264 -i output.raw -vcodec copy output.mp4
 
     //fwrite(buffers[buf.index].start, buf.bytesused, 1, stdout);
-    std::cerr << "Sending " << buf.bytesused << std::endl;
-    //sock.send_to(boost::asio::buffer(buffers[buf.index].start, buf.bytesused),
-    //udp_bcast_endpoint);
+    //std::cerr << "Sending " << buf.bytesused << std::endl;
+    std::shared_ptr<std::vector<char> > cbuf(new std::vector<char>(buf.bytesused));
+    std::copy(reinterpret_cast<char*>(buffers[buf.index].start), reinterpret_cast<char*>(buffers[buf.index].start) +
+	      buf.bytesused, cbuf->data());
+    size_t nbytes = buf.bytesused;
+    auto send_thread = [cbuf, nbytes, &udp_bcast_endpoint, &sock]() {
+      for (size_t start = 0; start < nbytes; start += g_packet_size) {
+	size_t end = std::min(start + g_packet_size, nbytes);
+	size_t cnbytes = end - start;
+	sock.send_to(boost::asio::buffer(cbuf->data() + start, cnbytes), udp_bcast_endpoint);
+      }
+    };
+    if (g_send_thread) {
+      g_send_thread->join();
+      delete g_send_thread;
+      g_send_thread = 0;
+    }
+    g_send_thread = new std::thread(send_thread);
 
     // Queue buffer for writing again
     xioctl(fd, VIDIOC_QBUF, &buf);

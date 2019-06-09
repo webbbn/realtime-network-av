@@ -126,7 +126,7 @@ Create a new python virtualenv (from an msys2 shell using standard windows pytho
 py -m venv env
 .\env\Scripts\activate
 py -m pip install --upgrade pip
-pip install --upgrade setup tools
+pip install --upgrade setuptools
 ~~~
 Install pi3d and dependencies
 ~~~
