@@ -1,5 +1,9 @@
 #pragma once
 
+#ifdef __cplusplus  
+extern "C" { 
+#endif 
+
 typedef struct fec_parms *fec_code_t;
 
 /*
@@ -28,3 +32,6 @@ void fec_print(fec_code_t code, int width);
 
 void fec_license(void);
 
+#ifdef __cplusplus  
+}
+#endif 

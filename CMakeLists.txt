@@ -1,7 +1,5 @@
-# cmakelists files in this project can
-# refer to the root source directory of the project as ${HELLO_SOURCE_DIR} and
-# to the root binary directory of the project as ${HELLO_BINARY_DIR}.
-cmake_minimum_required(VERSION 2.8.11)
+
+cmake_minimum_required(VERSION 3.10)
 project(realtime-network-av)
 
 option(USE_OMX "Build programs that use the OMX library on Raspberry Pi" OFF)
@@ -115,7 +113,7 @@ add_executable(video_stream_player
   src/sdl_render_window.cc
   src/transmitter.cc
   src/fec.c)
-target_link_libraries(video_stream_player ${AVCODEC_LIBRARY} ${AVFORMAT_LIBRARY} ${AVUTIL_LIBRARY} ${SWSCALE_LIBRARY} ${SDL2_LIBRARIES} ${SDL2_TTF_LIBRARY} ${SDL2_IMAGE_LIBRARY} ${SDL2_GFX_LIBRARY} ${Boost_LIBRARIES} ${Extra_Libraries} ${TARGET_srt} ssl crypto)
+target_link_libraries(video_stream_player ${AVCODEC_LIBRARY} ${AVFORMAT_LIBRARY} ${AVUTIL_LIBRARY} ${SWSCALE_LIBRARY} ${SDL2_LIBRARIES} ${SDL2_TTF_LIBRARY} ${SDL2_IMAGE_LIBRARY} ${SDL2_GFX_LIBRARY} ${Boost_LIBRARIES} ${Extra_Libraries} srt_shared ssl crypto)
 install(TARGETS video_stream_player DESTINATION bin COMPONENT applications)
 
 find_library(V4L_LIBRARY v4l2)

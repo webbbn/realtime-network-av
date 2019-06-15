@@ -10,6 +10,9 @@ import time
 import argparse
 import signal
 import logging
+import math
+
+import fec
 
 # Add the python directory to the python path
 root_dir = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
@@ -83,7 +86,7 @@ class UDPOutputStream(object):
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         if broadcast:
             self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-
+        
     def write(self, s):
         self.log.log(len(s))
         if self.broadcast:
@@ -92,6 +95,53 @@ class UDPOutputStream(object):
             host = self.host
         for i in range(0, len(s), self.maxpacket):
             self.sock.sendto(s[i : min(i + self.maxpacket, len(s))], (host, self.port))
+
+class FECUDPOutputStream(object):
+
+    def __init__(self, host, port, broadcast = False, maxpacket = 1310):
+        self.log = FPSLogger()
+        self.broadcast = broadcast
+        self.maxpacket = maxpacket
+        self.code_blocks = 8
+        self.fec_blocks = 4
+        self.host = host
+        self.port = port
+        self.frame_id = 0
+        #self.fec = FECCode(self.code_blocks, self.fec_blocks)
+        self.fec = fec.FECCode(self.code_blocks, self.fec_blocks)
+
+        # Create the communication socket
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        if broadcast:
+            self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+
+    def encode_cb(self, share_id, max_share_id, buf):
+        if self.broadcast:
+            host = '<broadcast>'
+        else:
+            host = self.host
+        self.sock.sendto(buf, (host, self.port))
+        self.count += len(buf)
+
+    def write(self, s):
+        msg_len = len(s)
+        count = 0
+        sub_frame_len = self.maxpacket * self.code_blocks
+        num_sub_frames = math.ceil(msg_len / sub_frame_len)
+        sub_frame_id = 0
+        for i in range(0, msg_len, sub_frame_len):
+            sub_frame = s[i : i + sub_frame_len]
+            # Encode the sub-frame into a set of FEC blocks
+            fec_blocks = self.fec.encode_frame(sub_frame, frame_id=self.frame_id,
+                                               sub_frame_id=sub_frame_id,
+                                               num_sub_frames=num_sub_frames)
+            for block in fec_blocks:
+                count += len(block)
+                self.sock.sendto(block, (host, self.port))
+            sub_frame_id += 1
+        self.frame_id = (self.frame_id + 1) % 255
+        self.log.log(count)
+
 
 class TCPOutputStream(object):
 
@@ -105,8 +155,6 @@ class TCPOutputStream(object):
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
         # Try connect to the receiver
-        print(self.host)
-        print(self.port)
         self.conn = self.sock.connect((self.host, self.port))
 
     def __del__(self):
@@ -150,6 +198,8 @@ class Camera(object):
             self.stream = UDPOutputStream(host, port)
         elif protocol.upper() == "UDPB":
             self.stream = UDPOutputStream(host, port, broadcast=True)
+        elif protocol.upper() == "FECUDP":
+            self.stream = FECUDPOutputStream(host, port, broadcast=True)
         elif protocol.upper() == "TCP":
             self.stream = TCPOutputStream(host, port)
         else:
@@ -205,8 +255,6 @@ class Camera(object):
                                             inline_headers=self.inline_headers, bitrate=self.bitrate, quality=self.quality,
                                             splitter_port=2, resize=(self.width, self.height))
             else:
-                print(self.bitrate)
-                print(self.quality)
                 self.camera.start_recording(self.stream, format='h264', intra_period=self.intra_period,
                                             inline_headers=self.intra_period, bitrate=self.bitrate, quality=self.quality)
         else:
@@ -215,7 +263,6 @@ class Camera(object):
             control = Control(self.device)
             control.set_control_value(9963800, 2)
 
-            print(self.device)
             frame = Frame(self.device, self.width, self.height)
             self.streaming = True
             while self.streaming:
@@ -251,7 +298,7 @@ if __name__ == '__main__':
     parser.add_argument("-rip", "--rec_intra_period", default=30, help="the birtate of the recorded video (in Mbps)")
     parser.add_argument("-rq", "--rec_quality", default=20, help="the recording encoding quality")
     parser.add_argument("-o", "--output", help="the output (recorded) video filename")
-    parser.add_argument("protocol", help="the network protocol to use (UDP | UDPB (Broadcast) | TCP | SRT | OpenHD)")
+    parser.add_argument("protocol", help="the network protocol to use (UDP | UDPB (Broadcast) | TCP | SRT | FECUDP | OpenHD)")
     parser.add_argument("host", help="the hostname/IP to stream the video to")
     parser.add_argument("port", help="the port to stream the video to")
 
