@@ -1,8 +1,24 @@
 #!/usr/bin/env python3
 
-import io
 import os
 import sys
+
+root_dir = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+lib_dir = os.path.join(root_dir, "lib")
+
+if 'LD_LIBRARY_PATH' not in os.environ:
+    os.environ['LD_LIBRARY_PATH'] = lib_dir
+    try:
+        os.execv(sys.argv[0], sys.argv)
+    except Exception as exc:
+        print('Failed re-exec:', exc)
+        sys.exit(1)
+
+# Add the python directory to the python path
+python_dir = os.path.join(root_dir, "python")
+sys.path.append(python_dir)
+
+import io
 import socket
 import struct
 import array
@@ -11,23 +27,15 @@ import argparse
 import signal
 import logging
 import math
-
-import fec
-
-# Add the python directory to the python path
-root_dir = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
-python_dir = os.path.join(root_dir, "python")
-sys.path.append(python_dir)
-lib_dir = os.path.join(root_dir, "lib")
-if "LD_LIBRARY_PATH" in os.environ:
-    os.environ["LD_LIBRARY_PATH"] = os.environ["LD_LIBRARY_PATH"] + ":" + lib_dir
-else:
-    os.environ["LD_LIBRARY_PATH"] = lib_dir
-
-using_picamera = False
+import time
 
 from format_as_table import format_as_table
 import py_srt
+import fec
+
+using_picamera = False
+using_socket = False
+using_v4l2 = False
 
 class FPSLogger(object):
 
@@ -93,6 +101,7 @@ class UDPOutputStream(object):
             host = '<broadcast>'
         else:
             host = self.host
+        print(len(s))
         for i in range(0, len(s), self.maxpacket):
             self.sock.sendto(s[i : min(i + self.maxpacket, len(s))], (host, self.port))
 
@@ -142,6 +151,28 @@ class FECUDPOutputStream(object):
         self.frame_id = (self.frame_id + 1) % 255
         self.log.log(count)
 
+class UDSOutputStream(object):
+
+    def __init__(self):
+        self.log = FPSLogger()
+
+        # Create the communication socket
+        self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
+
+    def connect(self, server_address):
+        self.server_address = server_address
+
+        # Try to connect to the UDS socket
+        try:
+            self.sock.connect(self.server_address)
+        except:
+            return False
+        return True
+
+    def write(self, s):
+        self.log.log(len(s))
+        print(len(s))
+        self.sock.send(s)
 
 class TCPOutputStream(object):
 
@@ -200,6 +231,17 @@ class Camera(object):
             self.stream = UDPOutputStream(host, port, broadcast=True)
         elif protocol.upper() == "FECUDP":
             self.stream = FECUDPOutputStream(host, port, broadcast=True)
+        elif protocol.upper() == "UDS":
+            self.stream = UDSOutputStream()
+            count = 0
+            self.stream.connect(host)
+            while not self.stream.connect(host):
+                if count == 10:
+                    logging.debug("Waiting for the UDS socket to be created.")
+                    count = 0
+                count += 1
+                time.sleep(1)
+            logging.debug("Connected")
         elif protocol.upper() == "TCP":
             self.stream = TCPOutputStream(host, port)
         else:
@@ -226,7 +268,7 @@ class Camera(object):
         self.rec_quality = quality
         self.rec_inline_headers = inline_headers
 
-    def start_streaming(self, rec_filename = False):
+    def start_streaming(self, rec_filename = False, sock = None):
 
         # The camera frame size has to be the larger of the streaming and recording size
         if rec_filename:
@@ -257,6 +299,13 @@ class Camera(object):
             else:
                 self.camera.start_recording(self.stream, format='h264', intra_period=self.intra_period,
                                             inline_headers=self.intra_period, bitrate=self.bitrate, quality=self.quality)
+        elif using_socket:
+
+            # Read from the socket and send it out
+            while True:
+                data = sock.recv(500000)
+                self.stream.write(data)
+
         else:
 
             # We're using V4L2
@@ -285,6 +334,8 @@ class Camera(object):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
+    parser.add_argument("-d", "--device", help="the input device name")
+    parser.add_argument("-s", "--socket", help="the unix domain socket address")
     parser.add_argument("-l", "--loglevel", default="info", help="set output logging level (debug, info, warning, error, critical)")
     parser.add_argument("-sw", "--width", default=1280, help="the width of the transmitted video")
     parser.add_argument("-sh", "--height", default=720, help="the height of the transmitted video")
@@ -298,9 +349,9 @@ if __name__ == '__main__':
     parser.add_argument("-rip", "--rec_intra_period", default=30, help="the birtate of the recorded video (in Mbps)")
     parser.add_argument("-rq", "--rec_quality", default=20, help="the recording encoding quality")
     parser.add_argument("-o", "--output", help="the output (recorded) video filename")
-    parser.add_argument("protocol", help="the network protocol to use (UDP | UDPB (Broadcast) | TCP | SRT | FECUDP | OpenHD)")
-    parser.add_argument("host", help="the hostname/IP to stream the video to")
-    parser.add_argument("port", help="the port to stream the video to")
+    parser.add_argument("-ho", "--host", help="the hostname/IP/address to stream the video to")
+    parser.add_argument("-p", "--port", help="the port to stream the video to")
+    parser.add_argument("protocol", help="the network protocol to use (UDP | UDPB (Broadcast) | TCP | SRT | FECUDP | UDS | OpenHD)")
 
     # Parse the options
     args = parser.parse_args()
@@ -326,48 +377,90 @@ if __name__ == '__main__':
     rec_q = int(args.rec_quality)
     output = args.output
     host = args.host
-    port = int(args.port)
+    if args.port:
+        port = int(args.port)
+        host_port = host + ":" + str(port)
+    else:
+        port = None
+        host_port = host
     h264_device = False
 
-    # Are we on an raspberry pi?
-    try:
-        import picamera
-        logging.debug("Loaded pycamera module")
-        using_picamera = True
-        logging.info("Using picamera to stream %dx%d/%d video to %s:%d at %f Mbps Using %s protocol " % (width, height, fps, host, port, bitrate, protocol))
+    # Force V4L2 if the user specified a device
+    if args.device:
+        using_v4l2 = True
 
-    except:
-        # If not, use V4L2
-        import py_v4l2 as v4l
-        from py_v4l2 import Frame
-        from py_v4l2 import Control
-        logging.debug("Pycamera not found - using video4linux2 interface")
+    # Did the user specify a unix domain socket as input
+    sock = None
+    if not using_v4l2 and args.socket:
 
-        # Query the list of video devices
-        devices = v4l.get_devices()
-
-        # Try to find an H264 capable device
-        for device in devices:
-            logging.debug(device)
-            logging.debug("")
-
+        # Remove the socket file if it exists
+        if os.path.exists(args.socket):
             try:
-                control = Control(device)
-                controls = control.get_controls()
-                logging.debug(format_as_table(controls, controls[0].keys(), controls[0].keys(), 'name'))
-                formats = control.get_formats()
-                logging.debug(format_as_table(formats, formats[0].keys(), formats[0].keys(), 'format'))
-                for format in formats:
-                    if format["format"] == "H264" and format["width"] == args.rec_width and format["height"] == args.rec_height:
-                        logging.debug("Found requested format: %s - %dx%d on %s" % (format["format"], format["width"], format["height"], device))
-                        h264_device = device
-            except Exception as e:
-                logging.debug("Error reading controls/formats: " + str(e))
-        if h264_device == False:
-            logging.critical("No appropriate V4L2 device found")
-            exit(1)
+                os.unlink(args.socket)
+            except OSError:
+                print("Error removing the Unix domain socket: " + args.socket)
+                exit(1)
+
+        # Create a UDS socket
+        sock = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
+
+        # Bind the socket to the port
+        sock.bind(args.socket)
+        using_socket = True
+        logging.info("Streaming packets to %s at %f Mbps Using %s protocol from %s" % (host_port, bitrate, protocol, args.socket))
+
+    if not using_socket and not using_v4l2:
+
+        # Try loading picamera module
+        try:
+            import picamera
+            logging.debug("Loaded pycamera module")
+            using_picamera = True
+            logging.info("Using picamera to stream %dx%d/%d video to %s at %f Mbps Using %s protocol " % (width, height, fps, host_port, bitrate, protocol))
+
+        except:
+            logging.debug("Pycamera not found - using video4linux2 interface")
+            pass
+
+    if not using_picamera and not using_socket:
+
+        # Did the user specify a device?
+        if args.device:
+
+            h264_device = args.device
+
+        else:
+
+            # Try finding a v4l2 device that will work
+            import py_v4l2 as v4l
+            from py_v4l2 import Frame
+            from py_v4l2 import Control
+
+            # Query the list of video devices
+            devices = v4l.get_devices()
+
+            # Try to find an H264 capable device
+            for device in devices:
+                logging.debug(device)
+                logging.debug("")
+
+                try:
+                    control = Control(device)
+                    controls = control.get_controls()
+                    logging.debug(format_as_table(controls, controls[0].keys(), controls[0].keys(), 'name'))
+                    formats = control.get_formats()
+                    logging.debug(format_as_table(formats, formats[0].keys(), formats[0].keys(), 'format'))
+                    for format in formats:
+                        if format["format"] == "H264" and format["width"] == args.rec_width and format["height"] == args.rec_height:
+                            logging.debug("Found requested format: %s - %dx%d on %s" % (format["format"], format["width"], format["height"], device))
+                            h264_device = device
+                except Exception as e:
+                    logging.debug("Error reading controls/formats: " + str(e))
+            if h264_device == False:
+                logging.critical("No appropriate V4L2 device found")
+                exit(1)
         logging.debug("Using " + h264_device)
-        logging.info("Streaming %dx%d video to %s:%d at %f Mbps Using %s protocol from %s" % (width, height, host, port, bitrate, protocol, h264_device))
+        logging.info("Streaming %dx%d video to %s at %f Mbps Using %s protocol from %s" % (width, height, host_port, bitrate, protocol, h264_device))
 
     # Create the camera object
     global camera
@@ -391,7 +484,7 @@ if __name__ == '__main__':
     signal.signal(signal.SIGINT, exit_handler)
 
     # Start streaming/recording
-    camera.start_streaming(output)
+    camera.start_streaming(output, sock = sock)
 
     while(1):
         time.sleep(1);
