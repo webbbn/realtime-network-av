@@ -1,8 +1,13 @@
 
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.5)
 project(realtime-network-av)
 
 option(USE_OMX "Build programs that use the OMX library on Raspberry Pi" OFF)
+option(USE_CYTHON "Build programs that requite cython" ON)
+
+set(CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
+
+INCLUDE(VersionMacros)
 
 if (WIN32)
   set(Extra_Libraries "ws2_32")
@@ -13,7 +18,6 @@ endif()
 
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3 -DNDEBUG")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D_hypot=hypot -O3 -DNDEBUG -DMS_WIN64")
-set(CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
 
 # We have submodule, so we need git to update the submodule
 find_package(Git QUIET)
@@ -84,12 +88,12 @@ install(TARGETS udp_audio_player DESTINATION bin COMPONENT applications)
 add_subdirectory(modules/dcadec)
 
 # To find and use ffmpeg avcodec library
-find_path(AVCODEC_INCLUDE_DIR libavcodec/avcodec.h)
-find_library(AVCODEC_LIBRARY avcodec)
-find_library(AVFORMAT_LIBRARY avformat)
-find_library(AVUTIL_LIBRARY avutil)
-find_library(SWSCALE_LIBRARY swscale)
-include_directories(${AVCODEC_INCLUDE_DIR})
+find_package(FFmpeg)
+COMPARE_VERSION_STR(valid_avcodec ${AVCODEC_VERSION} "60.0")
+if (0 LESS ${valid_avcodec})
+  include_directories(${AVCODEC_INCLUDE_DIR})
+  set(USE_AVCODEC true)
+endif ()
 find_path(DCADEC_INCLUDE_DIR libdcadec/common.h PATHS ${PROJECT_SOURCE_DIR}/modules/dcadec)
 find_library(DCADEC_LIBRARY dcacec PATHS ${PROJECT_SOURCE_DIR}/modules/dcadec)
 include_directories(${DCADEC_INCLUDE_DIR})
@@ -102,19 +106,21 @@ find_library(SDL2_GFX_LIBRARY SDL2_gfx)
 # Add the mavlink directory to the include path
 include_directories(${PROJECT_SOURCE_DIR}/modules/mavlink/common)
 
-include_directories(${SDL2_INCLUDE_DIRS} ${SRT_SOURCE_DIR}/srtcore ${SRT_SOURCE_DIR}/common ${SRT_BINARY_DIR} ${PROJECT_BINARY_DIR}/sdl/include)
-link_directories(${PROJECT_BINARY_DIR})
-add_executable(video_stream_player
-  src/video_stream_player.cc
-  src/telemetry.cc
-  src/texture.cc
-  src/ffmpeg_decoder.cc
-  src/sdl_osd.cc
-  src/sdl_render_window.cc
-  src/transmitter.cc
-  src/fec.c)
-target_link_libraries(video_stream_player ${AVCODEC_LIBRARY} ${AVFORMAT_LIBRARY} ${AVUTIL_LIBRARY} ${SWSCALE_LIBRARY} ${SDL2_LIBRARIES} ${SDL2_TTF_LIBRARY} ${SDL2_IMAGE_LIBRARY} ${SDL2_GFX_LIBRARY} ${Boost_LIBRARIES} ${Extra_Libraries} srt_shared ssl crypto)
-install(TARGETS video_stream_player DESTINATION bin COMPONENT applications)
+if (USE_AVCODEC)
+  include_directories(${SDL2_INCLUDE_DIRS} ${SRT_SOURCE_DIR}/srtcore ${SRT_SOURCE_DIR}/common ${SRT_BINARY_DIR} ${PROJECT_BINARY_DIR}/sdl/include)
+  link_directories(${PROJECT_BINARY_DIR})
+  add_executable(video_stream_player
+    src/video_stream_player.cc
+    src/telemetry.cc
+    src/texture.cc
+    src/ffmpeg_decoder.cc
+    src/sdl_osd.cc
+    src/sdl_render_window.cc
+    src/transmitter.cc
+    src/fec.c)
+  target_link_libraries(video_stream_player ${AVCODEC_LIBRARY} ${AVFORMAT_LIBRARY} ${AVUTIL_LIBRARY} ${SWSCALE_LIBRARY} ${SDL2_LIBRARIES} ${SDL2_TTF_LIBRARY} ${SDL2_IMAGE_LIBRARY} ${SDL2_GFX_LIBRARY} ${Boost_LIBRARIES} ${Extra_Libraries} srt_shared ssl crypto)
+  install(TARGETS video_stream_player DESTINATION bin COMPONENT applications)
+endif ()
 
 find_library(V4L_LIBRARY v4l2)
 if (V4L_LIBRARY)

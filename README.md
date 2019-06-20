@@ -8,7 +8,7 @@ A collection of utilities for real-time encoding and decoding audio and video st
 
 # Install dependent packages
 
-`sudo apt-get install cmake libasound2-dev libboost-all-dev libavcodec-dev libavformat-dev libswscale-dev`
+`sudo apt-get install cmake libasound2-dev libboost-all-dev libavcodec-dev libavformat-dev libswscale-dev libssl-dev`
 
 # Install dependent packages on Raspberry Pi
 
@@ -76,7 +76,7 @@ done
 
 ## Otherwise, install SDL2 libraries
 
-sudo apt-get install libsdl2-dev libsdl2-image-dev libsdl2-ttf-dev
+sudo apt-get install libsdl2-dev libsdl2-image-dev libsdl2-ttf-dev libsdl-gfx1.2-dev
 
 # Compile the code
 
