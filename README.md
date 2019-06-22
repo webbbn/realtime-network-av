@@ -8,7 +8,7 @@ A collection of utilities for real-time encoding and decoding audio and video st
 
 # Install dependent packages
 
-`sudo apt-get install cmake libasound2-dev libboost-all-dev libavcodec-dev libavformat-dev libswscale-dev libssl-dev`
+`sudo apt-get install cmake libasound2-dev libboost-all-dev libavcodec-dev libavformat-dev libswscale-dev libssl-dev cython3 libv4l-dev`
 
 # Install dependent packages on Raspberry Pi
 
@@ -80,7 +80,7 @@ sudo apt-get install libsdl2-dev libsdl2-image-dev libsdl2-ttf-dev libsdl-gfx1.2
 
 # Compile the code
 
-cmake -DCMAKE_CXX_FLAGS="-O3 -DNDEBUG -std=c++11" -DCMAKE_PREFIX_PATH=/home/webbb/realtime-network-av/build/sdl/ -DCMAKE_INSTALL_PREFIX=/home/webbb/realtime-network-av/install ..
+cmake -DCMAKE_PREFIX_PATH=`realpath \`pwd\``/build/sdl -DCMAKE_INSTALL_PREFIX=`realpath \`pwd\`/..`/install ..
 make -j 4 install
 
 # Build v4l2rtspserver
