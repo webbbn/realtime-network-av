@@ -1,5 +1,6 @@
 
 import numpy as np
+import sys
 import math
 import struct
 import zlib
@@ -45,10 +46,10 @@ cdef class FECCode:
         # Create the blocks out of the message
         for i in range(0, msglen, block_size):
             if (i + block_size) < msglen:
-                length = struct.pack("=H", block_size)
+                length = struct.pack("=I", block_size)
                 blocks.append(length + msg[i : i + block_size])
             else:
-                length = struct.pack("=H", msglen - i)
+                length = struct.pack("=I", msglen - i)
                 blocks.append(length + msg[i : msglen].ljust(block_size))
         nblocks = len(blocks)
 
@@ -63,18 +64,23 @@ cdef class FECCode:
         fec_blocks = []
         cdef unsigned char **c_fec_blocks = <unsigned char **>malloc(sizeof(unsigned char*) * self.n)
         for i in range(0, self.n):
-            fec_blocks.append(np.zeros(block_size + 2, dtype=np.uint8).tobytes())
+            fec_blocks.append(np.zeros(block_size + 4, dtype=np.uint8).tobytes())
             c_fec_blocks[i] = fec_blocks[i]
 
         # Encode the blocks
-        fec_encode(block_size + 2, c_data_blocks, nblocks, c_fec_blocks, self.n);
+        fec_encode(block_size + 4, c_data_blocks, nblocks, c_fec_blocks, self.n);
 
         # Cleanup
         free(c_data_blocks)
         free(c_fec_blocks)
 
-        # Return the encoded blocks
-        return data_blocks + fec_blocks
+        # Return the encoded blocks and FECs, interlieved
+        ret = []
+        for i, b in enumerate(data_blocks):
+            ret.append(b)
+            if i < len(fec_blocks):
+                ret.append(fec_blocks[i])
+        return ret
 
     # Encode a frame of data and append a header to each block returned
     def encode_frame(self, msg, frame_id = 0, sub_frame_id = 0, num_sub_frames = 0):

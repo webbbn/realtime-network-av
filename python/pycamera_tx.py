@@ -39,25 +39,21 @@ using_v4l2 = False
 
 class FPSLogger(object):
 
-    def __init__(self, frequency = 30):
-        self.frequency = frequency
-        self.count = 0;
-        self.fps = 0
-        self.bps = 0
-        self.prev_frame_time = time.time()
+    def __init__(self):
+        self.bytes = 0
+        self.count = 0
+        self.prev_time = time.time()
 
     def log(self, frame_size):
-        frame_time = time.time()
-        frame_dur = (frame_time - self.prev_frame_time)
-        self.fps += 1.0 / frame_dur
-        self.bps += frame_size * 8.0 / frame_dur
+        self.bytes += frame_size
         self.count += 1
-        self.prev_frame_time = frame_time
-        if self.count == self.frequency:
-            logging.debug("fps: %f  Mbps: %6.3f" % (self.fps / self.count, 1e-6 * self.bps / self.count))
-            self.fps = 0;
-            self.bps = 0;
-            self.count = 0;
+        cur_time = time.time()
+        dur = (cur_time - self.prev_time)
+        if dur > 2.0:
+            logging.debug("fps: %f  Mbps: %6.3f" % (self.count / dur, 8e-6 * self.bytes / dur))
+            self.prev_time = cur_time
+            self.bytes = 0
+            self.count = 0
 
 class SRTOutputStream(object):
 
@@ -101,7 +97,7 @@ class UDPOutputStream(object):
             host = '<broadcast>'
         else:
             host = self.host
-        print(len(s))
+        #print(len(s))
         for i in range(0, len(s), self.maxpacket):
             self.sock.sendto(s[i : min(i + self.maxpacket, len(s))], (host, self.port))
 
@@ -124,14 +120,6 @@ class FECUDPOutputStream(object):
         if broadcast:
             self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
 
-    def encode_cb(self, share_id, max_share_id, buf):
-        if self.broadcast:
-            host = '<broadcast>'
-        else:
-            host = self.host
-        self.sock.sendto(buf, (host, self.port))
-        self.count += len(buf)
-
     def write(self, s):
         msg_len = len(s)
         count = 0
@@ -149,6 +137,62 @@ class FECUDPOutputStream(object):
                 self.sock.sendto(block, (host, self.port))
             sub_frame_id += 1
         self.frame_id = (self.frame_id + 1) % 255
+        self.log.log(count)
+
+class WFBOutputStream(object):
+
+    def __init__(self, dev, code_blocks = 8, fec_blocks = 4, maxpacket = 1310):
+        self.log = FPSLogger()
+        self.code_blocks = code_blocks
+        self.fec_blocks = fec_blocks
+        self.maxpacket = maxpacket
+        self.dev = dev
+        self.frame_id = 0
+        self.seq_id = 0;
+        self.fec = fec.FECCode(self.code_blocks, self.fec_blocks)
+
+        # Create the radiotap headerb"\x00\x00\x0c\x00\0x04\0x80\0x00\0x00\0x16\0x00\0x00"
+        self.rt_header = bytearray([0x00, 0x00, # radiotap version
+                                    0x0c, 0x00, # radiotap header length
+                                    0x04, 0x80, 0x00, 0x00, # radiotap present flags (rate + tx flags)
+                                    0x24, # datarate (will be overwritten later)
+                                    0x00, 0x00, 0x00])
+
+        # Create the 802.11 header
+        self.ieee_header = bytearray([0x08, 0x02, 0x00, 0x00, # frame control field (2bytes), duration (2 bytes)
+	                              0x01, 0x00, 0x00, 0x00, 0x00, 0x00, # port = 1st byte of IEEE802.11 RA (mac) must be something odd (wifi hardware determines broadcast/multicast through odd/even check)
+	                              0x13, 0x22, 0x33, 0x44, 0x55, 0x66, # mac
+	                              0x13, 0x22, 0x33, 0x44, 0x55, 0x66, # mac
+	                              0x00, 0x00]) # IEEE802.11 seqnum, (will be overwritten later by Atheros firmware/wifi chip)
+
+        # Create the communication socket
+        self.sock = socket.socket(socket.AF_PACKET, socket.SOCK_RAW)
+
+        # Bind to the socket
+        self.sock.bind((self.dev, 0))
+
+    def write(self, s):
+        msg_len = len(s)
+        count = 0
+        sub_frame_len = self.maxpacket * self.code_blocks
+        num_sub_frames = math.ceil(msg_len / sub_frame_len)
+        lat = 0
+        for i in range(0, msg_len, sub_frame_len):
+            sub_frame = s[i : i + sub_frame_len]
+            # Encode the sub-frame into a set of FEC blocks
+            fec_blocks = self.fec.encode(sub_frame)
+            # Transmit each block and FEC block
+            for block in fec_blocks:
+                # Add the sequence number to the packet
+                header = struct.pack("=I", self.seq_id)
+                self.seq_id += 1
+                # Add the radiotap header and ieee header and send the packet.
+                #t = time.time()
+                self.sock.send(self.rt_header + self.ieee_header + header + block)
+                #t2 = time.time()
+                #lat += (t2 - t)
+                count += len(header) + len(block)
+        #logging.debug(lat * 1000)
         self.log.log(count)
 
 class UDSOutputStream(object):
@@ -171,7 +215,6 @@ class UDSOutputStream(object):
 
     def write(self, s):
         self.log.log(len(s))
-        print(len(s))
         self.sock.send(s)
 
 class TCPOutputStream(object):
@@ -231,6 +274,8 @@ class Camera(object):
             self.stream = UDPOutputStream(host, port, broadcast=True)
         elif protocol.upper() == "FECUDP":
             self.stream = FECUDPOutputStream(host, port, broadcast=True)
+        elif protocol.upper() == "WFB":
+            self.stream = WFBOutputStream(host)
         elif protocol.upper() == "UDS":
             self.stream = UDSOutputStream()
             count = 0
@@ -351,7 +396,8 @@ if __name__ == '__main__':
     parser.add_argument("-o", "--output", help="the output (recorded) video filename")
     parser.add_argument("-ho", "--host", help="the hostname/IP/address to stream the video to")
     parser.add_argument("-p", "--port", help="the port to stream the video to")
-    parser.add_argument("protocol", help="the network protocol to use (UDP | UDPB (Broadcast) | TCP | SRT | FECUDP | UDS | OpenHD)")
+    parser.add_argument("-de", "--dev", help="the wifi device to send raw packets to")
+    parser.add_argument("protocol", help="the network protocol to use (UDP | UDPB (Broadcast) | TCP | SRT | FECUDP | UDS | WFB)")
 
     # Parse the options
     args = parser.parse_args()
@@ -377,7 +423,15 @@ if __name__ == '__main__':
     rec_q = int(args.rec_quality)
     output = args.output
     host = args.host
-    if args.port:
+    dev = args.dev
+    if protocol == "WFB":
+        if args.dev == "":
+            print("Must specify the wifi device (-de/--dev) when using WFB protocol")
+            exit(1)
+        else:
+            # For now, stuff the device in the host parameter.
+            host = dev
+    elif args.port:
         port = int(args.port)
         host_port = host + ":" + str(port)
     else:
@@ -451,7 +505,7 @@ if __name__ == '__main__':
                     formats = control.get_formats()
                     logging.debug(format_as_table(formats, formats[0].keys(), formats[0].keys(), 'format'))
                     for format in formats:
-                        if format["format"] == "H264" and format["width"] == args.rec_width and format["height"] == args.rec_height:
+                        if format["format"] == "H264" and format["width"] == width and format["height"] == height:
                             logging.debug("Found requested format: %s - %dx%d on %s" % (format["format"], format["width"], format["height"], device))
                             h264_device = device
                 except Exception as e:
