@@ -28,6 +28,7 @@ import signal
 import logging
 import math
 import time
+import scapy.all as scapy
 
 from format_as_table import format_as_table
 import py_srt
@@ -141,7 +142,7 @@ class FECUDPOutputStream(object):
 
 class WFBOutputStream(object):
 
-    def __init__(self, dev, code_blocks = 8, fec_blocks = 4, maxpacket = 1310):
+    def __init__(self, dev, code_blocks = 8, fec_blocks = 4, maxpacket = 1024):
         self.log = FPSLogger()
         self.code_blocks = code_blocks
         self.fec_blocks = fec_blocks
@@ -155,7 +156,7 @@ class WFBOutputStream(object):
         self.rt_header = bytearray([0x00, 0x00, # radiotap version
                                     0x0c, 0x00, # radiotap header length
                                     0x04, 0x80, 0x00, 0x00, # radiotap present flags (rate + tx flags)
-                                    0x24, # datarate (will be overwritten later)
+                                    0x6c, # datarate (will be overwritten later)
                                     0x00, 0x00, 0x00])
 
         # Create the 802.11 header
@@ -174,9 +175,12 @@ class WFBOutputStream(object):
     def write(self, s):
         msg_len = len(s)
         count = 0
-        sub_frame_len = self.maxpacket * self.code_blocks
+        datalen = self.maxpacket - 4
+        sub_frame_len = datalen * self.code_blocks
         num_sub_frames = math.ceil(msg_len / sub_frame_len)
-        lat = 0
+        t = time.time()
+        #self.sock = scapy.conf.L2socket(iface=self.dev)
+        #pkts = []
         for i in range(0, msg_len, sub_frame_len):
             sub_frame = s[i : i + sub_frame_len]
             # Encode the sub-frame into a set of FEC blocks
@@ -187,12 +191,11 @@ class WFBOutputStream(object):
                 header = struct.pack("=I", self.seq_id)
                 self.seq_id += 1
                 # Add the radiotap header and ieee header and send the packet.
-                #t = time.time()
                 self.sock.send(self.rt_header + self.ieee_header + header + block)
-                #t2 = time.time()
-                #lat += (t2 - t)
+                #pkts.append(self.rt_header + self.ieee_header + header + block)
                 count += len(header) + len(block)
-        #logging.debug(lat * 1000)
+        #logging.debug((time.time() - t) * 1000)
+        #scapy.sendp(pkts, iface=self.dev, verbose=False)
         self.log.log(count)
 
 class UDSOutputStream(object):

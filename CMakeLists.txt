@@ -51,6 +51,11 @@ if(NOT EXISTS "${PROJECT_SOURCE_DIR}/modules/dcadec/dcadec.c")
   message(FATAL_ERROR "The dcadec submodule was not downloaded! GIT_SUBMODULE was turned off or failed. Please update submodules and try again.")
 endif()
 
+# Ensure the python-radiotap directory was checked out successfully
+if(NOT EXISTS "${PROJECT_SOURCE_DIR}/modules/python-radiotap/radiotap/radiotap.py")
+  message(FATAL_ERROR "The python-radiotap submodule was not downloaded! GIT_SUBMODULE was turned off or failed. Please update submodules and try again.")
+endif()
+
 # Add the local include directory to the include path
 include_directories(${PROJECT_SOURCE_DIR}/include)
 
@@ -155,6 +160,17 @@ if (OPENMAXIL_LIBRARY)
   target_link_libraries(rpi_video_player ${OPENMAXIL_LIBRARY} ${BRCMGLES_LIBRARY} ${BRCMEGL_LIBRARY} ${OPENMAXIL_LIBRARY} ${BCM_HOST_LIBRARY} ${VCOS_LIBRARY} ${VCHIQ_LIBRARY} ${Extra_Libraries})
   install(TARGETS rpi_video_player DESTINATION bin COMPONENT applications)
 endif ()
+
+add_executable(raw_wifi_bridge src/raw_wifi_bridge.cc)
+install(TARGETS raw_wifi_bridge DESTINATION bin COMPONENT applications)
+target_link_libraries(raw_wifi_bridge ${Boost_LIBRARIES} pthread)
+
+# Install the radiotap python directory
+install(FILES
+  ${PROJECT_SOURCE_DIR}/modules/python-radiotap/radiotap/__init__.py
+  ${PROJECT_SOURCE_DIR}/modules/python-radiotap/radiotap/radiotap.py
+  ${PROJECT_SOURCE_DIR}/modules/python-radiotap/radiotap/vht.py
+  DESTINATION python/python-radiotap)
 
 # Install the icons
 install(FILES "${PROJECT_SOURCE_DIR}/icons/attitude-background.png" DESTINATION icons COMPONENT icons)
