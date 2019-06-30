@@ -28,7 +28,6 @@ import signal
 import logging
 import math
 import time
-import scapy.all as scapy
 
 from format_as_table import format_as_table
 import py_srt
@@ -161,10 +160,13 @@ class WFBOutputStream(object):
 
         # Create the 802.11 header
         self.ieee_header = bytearray([0x08, 0x02, 0x00, 0x00, # frame control field (2bytes), duration (2 bytes)
-	                              0x01, 0x00, 0x00, 0x00, 0x00, 0x00, # port = 1st byte of IEEE802.11 RA (mac) must be something odd (wifi hardware determines broadcast/multicast through odd/even check)
+                                      # port = 1st byte of IEEE802.11 RA (mac) must be something odd
+                                      # (wifi hardware determines broadcast/multicast through odd/even check)
+	                              0x01, 0x00, 0x00, 0x00, 0x00, 0x00,
 	                              0x13, 0x22, 0x33, 0x44, 0x55, 0x66, # mac
 	                              0x13, 0x22, 0x33, 0x44, 0x55, 0x66, # mac
-	                              0x00, 0x00]) # IEEE802.11 seqnum, (will be overwritten later by Atheros firmware/wifi chip)
+                                      # IEEE802.11 seqnum, (will be overwritten later by Atheros firmware/wifi chip)
+	                              0x00, 0x00])
 
         # Create the communication socket
         self.sock = socket.socket(socket.AF_PACKET, socket.SOCK_RAW)
@@ -175,12 +177,13 @@ class WFBOutputStream(object):
     def write(self, s):
         msg_len = len(s)
         count = 0
+        # The amount of data in a block is less the size of the length field
         datalen = self.maxpacket - 4
+        # We need to send # code blocks of them
         sub_frame_len = datalen * self.code_blocks
+        # This means we likely need to divide the frame into a number of smaller sub-frames
         num_sub_frames = math.ceil(msg_len / sub_frame_len)
         t = time.time()
-        #self.sock = scapy.conf.L2socket(iface=self.dev)
-        #pkts = []
         for i in range(0, msg_len, sub_frame_len):
             sub_frame = s[i : i + sub_frame_len]
             # Encode the sub-frame into a set of FEC blocks
@@ -192,10 +195,7 @@ class WFBOutputStream(object):
                 self.seq_id += 1
                 # Add the radiotap header and ieee header and send the packet.
                 self.sock.send(self.rt_header + self.ieee_header + header + block)
-                #pkts.append(self.rt_header + self.ieee_header + header + block)
                 count += len(header) + len(block)
-        #logging.debug((time.time() - t) * 1000)
-        #scapy.sendp(pkts, iface=self.dev, verbose=False)
         self.log.log(count)
 
 class UDSOutputStream(object):
@@ -382,7 +382,7 @@ class Camera(object):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("-d", "--device", help="the input device name")
+    parser.add_argument("-d", "--device", help="the cameradevice name")
     parser.add_argument("-s", "--socket", help="the unix domain socket address")
     parser.add_argument("-l", "--loglevel", default="info", help="set output logging level (debug, info, warning, error, critical)")
     parser.add_argument("-sw", "--width", default=1280, help="the width of the transmitted video")
@@ -412,7 +412,7 @@ if __name__ == '__main__':
         log_level = logging.INFO
     logging.basicConfig(level=log_level, format="%(asctime)s %(levelname)s: %(message)s", datefmt="%H:%M:%S")
 
-    protocol = args.protocol
+    protocol = args.protocol.upper()
     width = int(args.width)
     height = int(args.height)
     fps = int(args.fps)
@@ -434,6 +434,8 @@ if __name__ == '__main__':
         else:
             # For now, stuff the device in the host parameter.
             host = dev
+            host_port = host
+            port = 0
     elif args.port:
         port = int(args.port)
         host_port = host + ":" + str(port)
