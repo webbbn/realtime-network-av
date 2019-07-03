@@ -18,7 +18,7 @@ if (USE_CYTHON)
   cython_add_module(py_v4l2)
   target_link_libraries(py_v4l2  ${PYTHON_LIBRARY} ${Extra_Libraries} v4l2)
 
-  cython_add_module(fec fec.pyx ${PROJECT_SOURCE_DIR}/src/fec.c)
+  cython_add_module(fec fec.pyx ${PROJECT_SOURCE_DIR}/src/fec.c ${PROJECT_SOURCE_DIR}/src/fec.cc)
   target_link_libraries(fec ${PYTHON_LIBRARY})
 
   install(TARGETS py_srt py_v4l2 fec DESTINATION python)

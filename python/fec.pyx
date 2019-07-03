@@ -6,8 +6,10 @@ import struct
 import zlib
 from libc.string cimport memcpy
 from libc.stdlib cimport malloc, free
+from libc.stdint cimport uint8_t, uint16_t
 from libcpp.map cimport map
 from libcpp.string cimport string
+from libcpp.vector cimport vector
 
 cdef extern from 'fec.h':
     void fec_init()
@@ -25,23 +27,65 @@ cdef extern from 'fec.h':
 		    unsigned int *erased_blocks,  # An array of indexes of the data blocks that are not valid
 		    unsigned short nr_fec_blocks) # The number (M) of FEC blocks passed in.
 
+cdef extern from 'fec.hh':
+    enum: FEC_PARTIAL
+    enum: FEC_COMPLETE
+    enum: FEC_ERROR
+    cdef uint16_t m_block_size
+
+    cdef cppclass FECDecoder:
+        FECDecoder(uint8_t num_blocks , uint8_t num_fec_blocks, uint16_t block_size, uint8_t interlieved)
+        FECDecoder()
+        uint8_t nblocks()
+        uint8_t nfecblocks()
+        vector[uint8_t*] blocks()
+        int add_block(const uint8_t * buf)
+
+fec_partial = FEC_PARTIAL
+fec_complete = FEC_COMPLETE
+fec_error = FEC_ERROR
+
+cdef class PyFECDecode:
+    cdef FECDecoder m_dec
+    cdef uint16_t m_block_size;
+
+    def __cinit__(self, uint8_t num_blocks, uint8_t num_fec_blocks, uint16_t block_size,
+                  uint8_t interlieved):
+        self.m_dec = FECDecoder(num_blocks, num_fec_blocks, block_size, interlieved)
+        self.m_block_size = block_size
+
+    def add_block(self, buf):
+        return self.m_dec.add_block(buf)
+
+    def get_blocks(self):
+        ret = []
+        for b in self.m_dec.blocks():
+            ary = np.asarray(<uint8_t[:self.m_block_size]>b)
+            ret.append(ary)
+        return ret
+
 cdef class FECCode:
     cdef unsigned char k
     cdef unsigned char n
+    cdef uint8_t interlieved
 
-    def __init__(self, k, n):
+    def __init__(self, k, n, interlieved = False):
         self.k = k
         self.n = n
+        self.interlieved = interlieved
         fec_init()
 
     def header_size(self):
         return 7;
 
     # Encode a message to a set of K blocks and N FEC blocks
-    def encode(self, msg):
+    def encode(self, msg, block_size = 0):
         msglen = len(msg)
         blocks = []
-        block_size = math.ceil(msglen / self.k)
+
+        # If the user didn't specify a block size, just the message as evenly as possible.
+        if block_size <= 0:
+            block_size = math.ceil(msglen / self.k)
 
         # Create the blocks out of the message
         for i in range(0, msglen, block_size):
@@ -49,8 +93,8 @@ cdef class FECCode:
                 length = struct.pack("=I", block_size)
                 blocks.append(length + msg[i : i + block_size])
             else:
-                length = struct.pack("=I", msglen - i)
-                blocks.append(length + msg[i : msglen].ljust(block_size))
+                length = struct.pack("=I", max(msglen - i, 0))
+                blocks.append(length + msg[i : msglen].ljust(block_size, b"\0"))
         nblocks = len(blocks)
 
         # Copy the input data block pointers into a C array
@@ -74,13 +118,78 @@ cdef class FECCode:
         free(c_data_blocks)
         free(c_fec_blocks)
 
-        # Return the encoded blocks and FECs, interlieved
+        # Return the encoded blocks and FECs
         ret = []
+        # Interlieve the data blocks and FEC blocks to match WFB if requested
         for i, b in enumerate(data_blocks):
             ret.append(b)
-            if i < len(fec_blocks):
+            if self.interlieved and i < len(fec_blocks):
                 ret.append(fec_blocks[i])
+        if not self.interlieved:
+            for b in fec_blocks:
+                ret.append(b)
+
         return ret
+
+    # Decode a set of blocks
+    def decode(self, fec_blocks):
+
+        # We'll get the block size from the fec_block elements
+        blocksize = 0
+
+        # Count the number of data blocks and FEC blocks
+        cdef size_t block_cnt = 0;
+        cdef size_t fec_block_cnt = 0;
+        for i, block in enumerate(fec_blocks):
+            if block is not None:
+                blocksize = len(block)
+                if i < self.k:
+                    block_cnt += 1
+                else:
+                    fec_block_cnt += 1
+
+        # We can't recover the packet if there are not at least K blocks + FEC blocks
+        if (block_cnt + fec_block_cnt) < self.k:
+            return False
+
+        # Allocate the data block array
+        nfec_blocks = self.k - block_cnt
+        cdef unsigned char **c_data_blocks = <unsigned char **>malloc(sizeof(unsigned char*) * self.k)
+        cdef unsigned int *c_erased_block_idxs = <unsigned int *>malloc(sizeof(unsigned int) * nfec_blocks)
+        data_blocks = []
+        eb = 0
+        for i in range(0, self.k):
+            if fec_blocks[i] is None:
+                data_blocks.append(np.zeros(blocksize, dtype=np.uint8).tobytes())
+                c_erased_block_idxs[eb] = i
+                eb += 1
+            else:
+                data_blocks.append(fec_blocks[i])
+            c_data_blocks[i] = data_blocks[i]
+
+        # Copy the input fec block pointers into a C array
+        cdef unsigned char **c_fec_blocks = <unsigned char **>malloc(sizeof(unsigned char*) * nfec_blocks)
+        cdef unsigned int *c_fec_block_idxs = <unsigned int *>malloc(sizeof(unsigned int) * nfec_blocks)
+        fb = 0
+        for i in range(0, self.n):
+            if fb == nfec_blocks:
+                break
+            if fec_blocks[self.k + i] is not None:
+                c_fec_blocks[fb] = fec_blocks[self.k + i]
+                c_fec_block_idxs[fb] = i
+                fb += 1
+
+        # Decode the blocks
+        fec_decode(blocksize, c_data_blocks, self.k, c_fec_blocks, c_fec_block_idxs, c_erased_block_idxs, nfec_blocks)
+
+        # Cleanup
+        free(c_data_blocks)
+        free(c_fec_blocks)
+        free(c_fec_block_idxs)
+        free(c_erased_block_idxs)
+
+        # Return the decoded blocks
+        return data_blocks
 
     # Encode a frame of data and append a header to each block returned
     def encode_frame(self, msg, frame_id = 0, sub_frame_id = 0, num_sub_frames = 0):
@@ -114,7 +223,8 @@ cdef class FECCode:
         return ret
 
     # Decode a set of blocks
-    def decode(self, fec_blocks):
+    def decode_old(self, fec_blocks):
+
         # We'll get the block size from the fec_block elements
         blocksize = 0
 

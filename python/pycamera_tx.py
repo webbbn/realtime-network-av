@@ -97,7 +97,6 @@ class UDPOutputStream(object):
             host = '<broadcast>'
         else:
             host = self.host
-        #print(len(s))
         for i in range(0, len(s), self.maxpacket):
             self.sock.sendto(s[i : min(i + self.maxpacket, len(s))], (host, self.port))
 
@@ -187,7 +186,7 @@ class WFBOutputStream(object):
         for i in range(0, msg_len, sub_frame_len):
             sub_frame = s[i : i + sub_frame_len]
             # Encode the sub-frame into a set of FEC blocks
-            fec_blocks = self.fec.encode(sub_frame)
+            fec_blocks = self.fec.encode(sub_frame, block_size=datalen)
             # Transmit each block and FEC block
             for block in fec_blocks:
                 # Add the sequence number to the packet
