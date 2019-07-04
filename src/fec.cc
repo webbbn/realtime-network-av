@@ -123,7 +123,9 @@ FECStatus FECDecoder::add_block(const uint8_t *buf) {
   // Make sure the sequence number is reasonable.
   if ((m_prev_seq_num != 0) && ((seq_num < m_prev_seq_num) || (seq_num > (m_prev_seq_num + 10)))) {
     if (++m_bad_seq_count > 8) {
+      std::cerr << "e0: " << m_prev_seq_num << std::endl;
       reset(0);
+      m_prev_seq_num = 0;
       return FEC_ERROR;
     }
     return FEC_PARTIAL;
@@ -148,10 +150,8 @@ FECStatus FECDecoder::add_block(const uint8_t *buf) {
     }
     memcpy(m_block_ptrs[ibn], buf + sizeof(uint32_t), m_block_size);
     m_set_blocks.insert(ibn);
-  } else if (pn < m_packet_num) {
-    // We likely have decoded early if we already incremented the packet number.
-    return FEC_PARTIAL;
-  } else {
+  } else if (pn > m_packet_num) {
+    std::cerr << "e1: " << m_set_blocks.size() << std::endl;
     // We must not have received enough blocks to decode this packet.
     reset(pn);
     return FEC_ERROR;
@@ -199,4 +199,9 @@ bool FECDecoder::decode() {
 	     fec_block_idxs.data(),
 	     erased_block_idxs.data(),
 	     erased_block_idxs.size());
+}
+
+void FECDecoder::reset(uint32_t pn) {
+  m_packet_num = pn;
+  m_set_blocks.clear();
 }

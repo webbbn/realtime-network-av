@@ -163,7 +163,11 @@ endif ()
 
 add_executable(raw_wifi_bridge src/raw_wifi_bridge.cc)
 install(TARGETS raw_wifi_bridge DESTINATION bin COMPONENT applications)
-target_link_libraries(raw_wifi_bridge ${Boost_LIBRARIES} pthread)
+target_link_libraries(raw_wifi_bridge ${Boost_LIBRARIES} pcap pthread)
+
+add_executable(raw_wifi_receiver src/raw_wifi_receiver.cc src/radiotap.c src/fec.c src/fec.cc)
+install(TARGETS raw_wifi_receiver DESTINATION bin COMPONENT applications)
+target_link_libraries(raw_wifi_receiver ${Boost_LIBRARIES} pcap pthread)
 
 # Install the radiotap python directory
 install(FILES

@@ -71,11 +71,7 @@ private:
   std::vector<uint8_t*> m_fec_ptrs;
   std::set<uint8_t> m_set_blocks;
 
-  void reset(uint32_t pn) {
-    m_packet_num = pn + 1;
-    m_prev_seq_num = 0;
-    m_set_blocks.clear();
-  }
+  void reset(uint32_t pn);
 
   bool decode();
 };
