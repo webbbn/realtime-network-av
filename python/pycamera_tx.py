@@ -2,6 +2,7 @@
 
 import os
 import sys
+import numpy as np
 
 root_dir = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
 lib_dir = os.path.join(root_dir, "lib")
@@ -42,15 +43,21 @@ class FPSLogger(object):
     def __init__(self):
         self.bytes = 0
         self.count = 0
+        self.blocks = 0
         self.prev_time = time.time()
 
-    def log(self, frame_size):
+    def log(self, frame_size, blocks = 0):
         self.bytes += frame_size
+        self.blocks += blocks
         self.count += 1
         cur_time = time.time()
         dur = (cur_time - self.prev_time)
         if dur > 2.0:
-            logging.debug("fps: %f  Mbps: %6.3f" % (self.count / dur, 8e-6 * self.bytes / dur))
+            if self.blocks > 0:
+                logging.debug("fps: %f  Mbps: %6.3f  blocks: %d" %
+                              (self.count / dur, 8e-6 * self.bytes / dur, self.blocks))
+            else:
+                logging.debug("fps: %f  Mbps: %6.3f" % (self.count / dur, 8e-6 * self.bytes / dur))
             self.prev_time = cur_time
             self.bytes = 0
             self.count = 0
@@ -148,7 +155,7 @@ class WFBOutputStream(object):
         self.dev = dev
         self.frame_id = 0
         self.seq_id = 0;
-        self.fec = fec.FECCode(self.code_blocks, self.fec_blocks)
+        self.fec = fec.PyFECEncoder(self.code_blocks, self.fec_blocks, self.maxpacket, False)
 
         # Create the radiotap headerb"\x00\x00\x0c\x00\0x04\0x80\0x00\0x00\0x16\0x00\0x00"
         self.rt_header = bytearray([0x00, 0x00, # radiotap version
@@ -174,28 +181,19 @@ class WFBOutputStream(object):
         self.sock.bind((self.dev, 0))
 
     def write(self, s):
-        msg_len = len(s)
+        # Encode the packet
+        self.fec.encode(s)
+        # Retrieve the encoded blocks
+        blocks = self.fec.get_blocks()
+        # Trasmit the blocks
         count = 0
-        # The amount of data in a block is less the size of the length field
-        datalen = self.maxpacket - 4
-        # We need to send # code blocks of them
-        sub_frame_len = datalen * self.code_blocks
-        # This means we likely need to divide the frame into a number of smaller sub-frames
-        num_sub_frames = math.ceil(msg_len / sub_frame_len)
-        t = time.time()
-        for i in range(0, msg_len, sub_frame_len):
-            sub_frame = s[i : i + sub_frame_len]
-            # Encode the sub-frame into a set of FEC blocks
-            fec_blocks = self.fec.encode(sub_frame, block_size=datalen)
-            # Transmit each block and FEC block
-            for block in fec_blocks:
-                # Add the sequence number to the packet
-                header = struct.pack("=I", self.seq_id)
-                self.seq_id += 1
-                # Add the radiotap header and ieee header and send the packet.
-                self.sock.send(self.rt_header + self.ieee_header + header + block)
-                count += len(header) + len(block)
-        self.log.log(count)
+        for block in blocks:
+            #print("  " + str(len(block)) + " " + str(block[0]) + " " + str(block[1]))
+            # Add the radiotap header and ieee header and send the packet.
+            msg = np.append(self.rt_header + self.ieee_header, block)
+            self.sock.send(msg)
+            count += len(block)
+        self.log.log(count, len(blocks))
 
 class UDSOutputStream(object):
 

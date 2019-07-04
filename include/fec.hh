@@ -16,6 +16,28 @@ typedef enum {
   FEC_ERROR
 } FECStatus;
 
+class FECEncoder {
+public:
+
+  FECEncoder(uint8_t num_blocks = 8, uint8_t num_fec_blocks = 4, uint16_t block_size = 1024,
+	     bool interlieved = false);
+
+  void encode(const uint8_t *buf, size_t buf_len);
+
+  std::vector<uint8_t*> &blocks() {
+    return m_block_ptrs;
+  }
+
+private:
+  uint8_t m_num_blocks;
+  uint8_t m_num_fec_blocks;
+  uint16_t m_block_size;
+  bool m_interlieved;
+  uint32_t m_seq_num;
+  std::vector<uint8_t> m_buf;
+  std::vector<uint8_t*> m_block_ptrs;
+};
+
 class FECDecoder {
 public:
 
