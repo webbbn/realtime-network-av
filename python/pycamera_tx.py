@@ -155,7 +155,7 @@ class WFBOutputStream(object):
         self.dev = dev
         self.frame_id = 0
         self.seq_id = 0;
-        self.fec = fec.PyFECEncoder(self.code_blocks, self.fec_blocks, self.maxpacket, False)
+        self.fec = fec.PyFECEncoder(self.code_blocks, self.fec_blocks, self.maxpacket, True)
 
         # Create the radiotap headerb"\x00\x00\x0c\x00\0x04\0x80\0x00\0x00\0x16\0x00\0x00"
         self.rt_header = bytearray([0x00, 0x00, # radiotap version
@@ -188,7 +188,6 @@ class WFBOutputStream(object):
         # Trasmit the blocks
         count = 0
         for block in blocks:
-            #print("  " + str(len(block)) + " " + str(block[0]) + " " + str(block[1]))
             # Add the radiotap header and ieee header and send the packet.
             msg = np.append(self.rt_header + self.ieee_header, block)
             self.sock.send(msg)
