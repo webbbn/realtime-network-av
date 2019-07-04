@@ -85,6 +85,6 @@ cdef class PyFECEncoder:
     def get_blocks(self):
         ret = []
         for b in self.m_enc.blocks():
-            ary = np.asarray(<uint8_t[:self.m_block_size]>b)
+            ary = np.asarray(<uint8_t[:self.m_block_size + 4]>b)
             ret.append(ary)
         return ret
