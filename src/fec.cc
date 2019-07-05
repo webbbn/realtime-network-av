@@ -171,14 +171,14 @@ FECStatus FECDecoder::add_block(const uint8_t *buf) {
   if (m_set_blocks.size() == m_num_blocks) {
 
     // Decoce the block.
-    bool decode_error = decode();
+    bool decode_result = decode();
     ++m_stats.total_packets;
 
     // Start waiting for blocks from the next packet.
     reset(pn + 1);
 
     // Assume success
-    return decode_error ? FEC_ERROR : FEC_COMPLETE;
+    return decode_result ? FEC_COMPLETE : FEC_ERROR;
   }
   return FEC_PARTIAL;
 }

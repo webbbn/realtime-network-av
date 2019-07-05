@@ -361,6 +361,8 @@ int main(int argc, const char** argv) {
   s.sin_family = AF_INET;
   s.sin_port = (in_port_t)htons(5600);
   s.sin_addr.s_addr = inet_addr("192.168.128.255");
+  //s.sin_addr.s_addr = inet_addr("192.168.128.193");
+  //s.sin_addr.s_addr = htonl(INADDR_ANY);
 
   // Create the packet receive thread
   MsgQueue queue;
@@ -392,7 +394,7 @@ int main(int argc, const char** argv) {
     // Add this block to the FEC decoder.
     //++total_blocks;
     if (fec.add_block(buf->data()) == FECStatus::FEC_COMPLETE) {
-	
+
       // Output the data blocks
       const std::vector<uint8_t*> &blocks = fec.blocks();
       for (size_t b = 0; b < nblocks; ++b) {
@@ -400,8 +402,8 @@ int main(int argc, const char** argv) {
 	uint32_t cur_block_size = *reinterpret_cast<const uint32_t*>(block);
 	if (cur_block_size > 0) {
 	  //std::cout.write(reinterpret_cast<const char*>(block + 4), cur_block_size);
-	  //sendto(sock, block + 4, cur_block_size, 0, (struct sockaddr *)&s,
-	  //sizeof(struct sockaddr_in));
+	  sendto(sock, block + 4, cur_block_size, 0, (struct sockaddr *)&s,
+		 sizeof(struct sockaddr_in));
 	}
       }
     }
