@@ -8,7 +8,7 @@ A collection of utilities for real-time encoding and decoding audio and video st
 
 # Install dependent packages
 
-`sudo apt-get install cmake libasound2-dev libboost-all-dev libavcodec-dev libavformat-dev libswscale-dev libssl-dev cython3 libv4l-dev`
+`sudo apt-get install cmake libasound2-dev libboost-all-dev libavcodec-dev libavformat-dev libswscale-dev libssl-dev cython3 libv4l-dev libpcap-dev`
 
 # Install dependent packages on Raspberry Pi
 
@@ -26,19 +26,21 @@ sudo apt-get autoremove -y
 sudo apt-get install libfontconfig-dev qt5-default libfreeimage-dev libopenal-dev libpango1.0-dev libsndfile-dev libudev-dev libtiff5-dev libwebp-dev libasound2-dev libaudio-dev libxrandr-dev libxcursor-dev libxi-dev libxinerama-dev libxss-dev libesd0-dev freeglut3-dev libmodplug-dev libsmpeg-dev libjpeg-dev libpng-dev libdirectfb-dev libdirectfb-bin
 
 wget https://www.libsdl.org/release/SDL2-2.0.9.tar.gz
-wget https://www.libsdl.org/projects/SDL_image/release/SDL2_image-2.0.4.tar.gz
+wget https://www.libsdl.org/projects/SDL_image/release/SDL2_image-2.0.5.tar.gz
 wget https://www.libsdl.org/projects/SDL_ttf/release/SDL2_ttf-2.0.15.tar.gz
+wget http://www.ferzkopp.net/Software/SDL2_gfx/SDL2_gfx-1.0.4.tar.gz
 
 tar xvf SDL2-2.0.9.tar.gz
-tar xvf SDL2_image-2.0.4.tar.gz
+tar xvf SDL2_image-2.0.5.tar.gz
 tar xvf SDL2_ttf-2.0.15.tar.gz
+tar xvf SDL2_gfx-1.0.4.tar.gz
 
 cd SDL2-2.0.9
 CFLAGS="-O3 -DNDEBUG" ./configure --prefix=/home/webbb/realtime-network-av/build/sdl --disable-pulseaudio --disable-esd --disable-video-mir --disable-video-wayland --disable-video-opengl --disable-video-directfb --host=arm-raspberry-linux-gnueabihf
 make -j4 install
 cd ..
 
-for D in SDL2_image-2.0.4 SDL2_ttf-2.0.15; do
+for D in SDL2_image-2.0.5 SDL2_ttf-2.0.15 SDL2_gfx-1.0.4; do
   cd ${D}
   CFLAGS="-O3 -DNDEBUG" ./configure --prefix=/home/webbb/realtime-network-av/build/sdl
   make install
@@ -80,7 +82,7 @@ sudo apt-get install libsdl2-dev libsdl2-image-dev libsdl2-ttf-dev libsdl-gfx1.2
 
 # Compile the code
 
-cmake -DCMAKE_PREFIX_PATH=`realpath \`pwd\``/build/sdl -DCMAKE_INSTALL_PREFIX=`realpath \`pwd\`/..`/install ..
+cmake -DCMAKE_PREFIX_PATH=`realpath \`pwd\``/sdl -DCMAKE_INSTALL_PREFIX=`realpath \`pwd\`/..`/install ..
 make -j 4 install
 
 # Build v4l2rtspserver
@@ -134,4 +136,91 @@ pip install numpy
 pip install pillow
 pip install pygame
 pip install pi3d
+~~~
+
+# Configure Raspberry Pi 3B as WiFi Access Point
+
+~~~
+sudo apt-get install hostapd dnsmasq
+~~~
+Add to the end of /etc/dhcpcd.conf:
+~~~
+denyinterfaces wlan0
+~~~
+Add to the end of /etc/network/interfaces
+~~~
+auto lo
+iface lo inet loopback
+
+auto eth0
+iface eth0 inet dhcp
+
+allow-hotplug wlan0
+iface wlan0 inet static
+    address 192.168.128.1
+    netmask 255.255.255.0
+    network 192.168.128.0
+    broadcast 192.168.128.255
+~~~
+Add the following to /etc/hostapd/hostapd.conf
+~~~
+interface=wlan0
+driver=nl80211
+ssid=groundpi
+wpa_passphrase=somethingsecret
+hw_mode=a
+channel=40
+ieee80211n=1
+wmm_enabled=1
+ht_capab=[HT40][SHORT-GI-20][DSSS_CCK-40]
+macaddr_acl=0
+auth_algs=1
+ignore_broadcast_ssid=0
+wpa=2
+wpa_key_mgmt=WPA-PSK
+rsn_pairwise=CCMP
+~~~
+Edit /etc/default/hostapd
+~~~
+DAEMON_CONF="/etc/hostapd/hostapd.conf"
+~~~
+Edit /etc/dnsmasq.conf
+~~~
+interface=wlan0
+listen-address=192.168.128.1
+bind-interfaces
+server=8.8.8.8
+domain-needed
+bogus-priv
+dhcp-range=192.168.128.100,192.168.128.200,24h
+~~~
+Enable hostapd
+~~~
+sudo systemctl unmask hostapd
+sudo systemctl enable hostapd
+~~~
+Restart
+~~~
+sudo reboot
+~~~
+
+# Configure Atheros WiFi adapter in monitor mode
+~~~
+DEV=wlan1
+ifconfig ${DEV} down
+rmmod ath9k_htc
+sleep 2
+modprobe ath9k_htc
+sleep 2
+ifconfig ${DEV} down
+iwconfig ${DEV} mode managed
+ifconfig ${DEV} up
+iw dev ${DEV} set bitrates legacy-2.4 18
+ifconfig ${DEV} down
+iw ${DEV} set monitor otherbss fcsfail
+#iw reg set 80
+ifconfig ${DEV} up
+#iwconfig ${DEV} freq 2.472G
+iw dev ${DEV} set channel 1
+#iwconfig ${DEV} txpower 30
 ~~~

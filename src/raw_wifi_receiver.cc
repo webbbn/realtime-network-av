@@ -39,6 +39,7 @@ typedef struct {
   pcap_t *ppcap;
   int selectable_fd;
   int n80211HeaderLength;
+  uint16_t block_size;
 } monitor_interface_t;
 
 template <typename tmpl__T>
@@ -75,6 +76,10 @@ private:
   std::mutex m_mutex;
   std::condition_variable m_cond;
 };
+
+typedef std::shared_ptr<std::vector<uint8_t> > MsgBuffer;
+typedef Queue<MsgBuffer> MsgQueue;
+
 
 bool open_raw_sock_rx(const std::string &name, int port, monitor_interface_t *interface) {
   struct bpf_program bpfprogram;
@@ -129,6 +134,138 @@ bool open_raw_sock_rx(const std::string &name, int port, monitor_interface_t *in
   return true;
 }
 
+bool receive_packet(monitor_interface_t &interface, MsgQueue &msg_queue) {
+
+  struct pcap_pkthdr *pcap_packet_header = NULL;
+  uint8_t const *pcap_packet_data = NULL;
+  while (1) {
+
+    // Wait until a packet is available.
+    fd_set readset;
+    struct timeval to;
+    to.tv_sec = 0;
+    to.tv_usec = 1e5; // 100ms
+    FD_ZERO(&readset);
+    FD_SET(interface.selectable_fd, &readset);
+    if(select(30, &readset, NULL, NULL, &to) == 0) {
+      continue;
+    }
+    if(!FD_ISSET(interface.selectable_fd, &readset)) {
+      continue;
+    }
+
+    // Recieve the next packet
+    int retval = pcap_next_ex(interface.ppcap, &pcap_packet_header, &pcap_packet_data);
+    if (retval < 0) {
+      std::cerr << "Error receiving from the raw data socket.\n";
+      std::cerr << "  " << pcap_geterr(interface.ppcap) << std::endl;
+      continue;
+    } else if(retval == 0) {
+      // Timeout, just continue;
+      continue;
+    }
+
+    break;
+  }
+
+  // fetch radiotap header length from radiotap header (seems to be 36 for Atheros and 18 for Ralink)
+  uint16_t rt_header_len = (pcap_packet_data[3] << 8) + pcap_packet_data[2];
+
+  // check for packet type and set headerlen accordingly
+  pcap_packet_data += rt_header_len;
+  switch (pcap_packet_data[1]) {
+  case 0x01: // data short, rts
+    interface.n80211HeaderLength = 0x05;
+    break;
+  case 0x02: // data
+    interface.n80211HeaderLength = 0x18;
+    break;
+  default:
+    break;
+  }
+  pcap_packet_data -= rt_header_len;
+
+  if (pcap_packet_header->len < uint32_t(rt_header_len + interface.n80211HeaderLength)) {
+    std::cerr
+      << "rx ERROR: ppcapheaderlen < u16headerlen+n80211headerlen: pcap_packet_header->len: "
+      << pcap_packet_header->len << std::endl;
+    return false;
+  }
+
+  int bytes = pcap_packet_header->len - (rt_header_len + interface.n80211HeaderLength);
+  if (bytes < 0) {
+    std::cerr << "rx ERROR: bytes < 0: bytes: " << bytes << std::endl;
+    return false;
+  }
+  struct ieee80211_radiotap_iterator rti;
+  if (ieee80211_radiotap_iterator_init(&rti,(struct ieee80211_radiotap_header *)pcap_packet_data,
+				       pcap_packet_header->len) < 0) {
+    std::cerr << "rx ERROR: radiotap_iterator_init < 0\n";
+    return false;
+  }
+
+  //PENUMBRA_RADIOTAP_DATA prd;
+  int n;
+  while ((n = ieee80211_radiotap_iterator_next(&rti)) == 0) {
+    switch (rti.this_arg_index) {
+      /* we don't use these radiotap infos right now, disabled
+	 case IEEE80211_RADIOTAP_RATE:
+	 prd.m_nRate = (*rti.this_arg);
+	 break;
+	 case IEEE80211_RADIOTAP_CHANNEL:
+	 prd.m_nChannel =
+	 le16_to_cpu(*((u16 *)rti.this_arg));
+	 prd.m_nChannelFlags =
+	 le16_to_cpu(*((u16 *)(rti.this_arg + 2)));
+	 break;
+	 case IEEE80211_RADIOTAP_ANTENNA:
+	 prd.m_nAntenna = (*rti.this_arg) + 1;
+      */
+      break;
+    case IEEE80211_RADIOTAP_FLAGS:
+      //prd.m_nRadiotapFlags = *rti.this_arg;
+      break;
+    case IEEE80211_RADIOTAP_DBM_ANTSIGNAL:
+#if 0
+      dbm_last[adapter_no] = dbm[adapter_no];
+      dbm[adapter_no] = (int8_t)(*rti.this_arg);
+
+      // if we have a better signal than last time, ignore
+      if (dbm[adapter_no] > dbm_last[adapter_no]) {
+	dbm[adapter_no] = dbm_last[adapter_no];
+      }
+
+      dbm_ts_now[adapter_no] = current_timestamp();
+      if (dbm_ts_now[adapter_no] - dbm_ts_prev[adapter_no] > 220) {
+	dbm_ts_prev[adapter_no] = current_timestamp();
+	rx_status->adapter[adapter_no].current_signal_dbm = dbm[adapter_no];
+	dbm[adapter_no] = 99;
+	dbm_last[adapter_no] = 99;
+      }
+#endif
+      break;
+    }
+  }
+
+  pcap_packet_data += rt_header_len + interface.n80211HeaderLength;
+/*
+  {
+    static uint32_t prev_seq = 0;
+    const uint32_t *p32 = reinterpret_cast<const uint32_t*>(pcap_packet_data);
+    if ((*p32 - 1)!= prev_seq) {
+      std::cerr << "missed: " << prev_seq << " " << *p32 << std::endl;
+    }
+    prev_seq = *p32;
+  }
+*/
+
+  MsgBuffer buf(new std::vector<uint8_t>(interface.block_size + 4));
+  std::copy(pcap_packet_data, pcap_packet_data + interface.block_size + 4, buf->begin());
+  msg_queue.push(buf);
+
+  return true;
+}
+
 std::string hostname_to_ip(const std::string &hostname) {
 
   // Try to lookup the host.
@@ -157,17 +294,17 @@ int main(int argc, const char** argv) {
 
   std::string hostname;
   uint16_t block_size;
-  uint8_t nblocks;
-  uint8_t nfec_blocks;
+  uint16_t nblocks;
+  uint16_t nfec_blocks;
   po::options_description desc("Allowed options");
   desc.add_options()
     ("help,h", "produce help message")
     ("debug,D", "print debug messages")
     ("blocks_size,B", po::value<uint16_t>(&block_size)->default_value(1024),
      "the size of the FEC blocks")
-    ("nblocks,N", po::value<uint8_t>(&nblocks)->default_value(8),
+    ("nblocks,N", po::value<uint16_t>(&nblocks)->default_value(8),
      "the number of data blockes used in encoding")
-    ("nfec_blocks,K", po::value<uint8_t>(&nfec_blocks)->default_value(4),
+    ("nfec_blocks,K", po::value<uint16_t>(&nfec_blocks)->default_value(4),
      "the number of FEC blockes used in encoding")
     ;
 
@@ -202,6 +339,7 @@ int main(int argc, const char** argv) {
     std::cerr << "Error opening the raw socket\n";
     return EXIT_FAILURE;
   }
+  interface.block_size = block_size;
 
   // Open the UDP send socket
   int sock = socket(AF_INET, SOCK_DGRAM, 0);
@@ -215,205 +353,72 @@ int main(int argc, const char** argv) {
     return EXIT_FAILURE;
   }
 
+  // Initialize the UDP broadcast output address
+  struct sockaddr_in s;
+  memset(&s, '\0', sizeof(struct sockaddr_in));
+  s.sin_family = AF_INET;
+  s.sin_port = (in_port_t)htons(5600);
+  s.sin_addr.s_addr = inet_addr("192.168.128.255");
+
+  // Create the packet receive thread
+  MsgQueue queue;
+  bool done = false;
+  auto recv = [&interface, &queue, &done]() {
+		while(!done) {
+		  receive_packet(interface, queue);
+		}
+	      };
+  std::thread recv_thread(recv);
+
   // Retrieve messages from the raw data socket.
-  uint32_t error_packets = 0;
-  uint32_t good_packets = 0;
-  uint32_t total_blocks = 0;
-  uint32_t tx_bytes = 0;
   double prev_time = cur_time();
-  while (1) {
-
-    // Recieve the next packet
-    struct pcap_pkthdr *pcap_packet_header = NULL;
-    uint8_t const *pcap_packet_data = NULL;
-    int retval = pcap_next_ex(interface.ppcap, &pcap_packet_header, &pcap_packet_data);
-    if (retval < 0) {
-      std::cerr << "Error receiving from the raw data socket.\n";
-      std::cerr << "  " << pcap_geterr(interface.ppcap) << std::endl;
-      return EXIT_FAILURE;
-    } else if(retval == 0) {
-      // Timeout, just continue;
-      continue;
-    }
-
-    // fetch radiotap header length from radiotap header (seems to be 36 for Atheros and 18 for Ralink)
-    uint16_t rt_header_len = (pcap_packet_data[3] << 8) + pcap_packet_data[2];
-
-    // check for packet type and set headerlen accordingly
-    pcap_packet_data += rt_header_len;
-    switch (pcap_packet_data[1]) {
-    case 0x01: // data short, rts
-      interface.n80211HeaderLength = 0x05;
-      break;
-    case 0x02: // data
-      interface.n80211HeaderLength = 0x18;
-      break;
-    default:
-      break;
-    }
-    pcap_packet_data -= rt_header_len;
-
-    if (pcap_packet_header->len < (rt_header_len + interface.n80211HeaderLength)) {
-      std::cerr
-	<< "rx ERROR: ppcapheaderlen < u16headerlen+n80211headerlen: pcap_packet_header->len: "
-	<< pcap_packet_header->len << std::endl;
-      continue;
-    }
-
-    int bytes = pcap_packet_header->len - (rt_header_len + interface.n80211HeaderLength);
-    if (bytes < 0) {
-      std::cerr << "rx ERROR: bytes < 0: bytes: " << bytes << std::endl;
-      continue;
-    }
-    struct ieee80211_radiotap_iterator rti;
-    if (ieee80211_radiotap_iterator_init(&rti,(struct ieee80211_radiotap_header *)pcap_packet_data,
-					 pcap_packet_header->len) < 0) {
-      std::cerr << "rx ERROR: radiotap_iterator_init < 0\n";
-      continue;
-    }
-
-    //PENUMBRA_RADIOTAP_DATA prd;
-    int n;
-    while ((n = ieee80211_radiotap_iterator_next(&rti)) == 0) {
-      switch (rti.this_arg_index) {
-	/* we don't use these radiotap infos right now, disabled
-	   case IEEE80211_RADIOTAP_RATE:
-	   prd.m_nRate = (*rti.this_arg);
-	   break;
-	   case IEEE80211_RADIOTAP_CHANNEL:
-	   prd.m_nChannel =
-	   le16_to_cpu(*((u16 *)rti.this_arg));
-	   prd.m_nChannelFlags =
-	   le16_to_cpu(*((u16 *)(rti.this_arg + 2)));
-	   break;
-	   case IEEE80211_RADIOTAP_ANTENNA:
-	   prd.m_nAntenna = (*rti.this_arg) + 1;
-	*/
-	break;
-      case IEEE80211_RADIOTAP_FLAGS:
-	//prd.m_nRadiotapFlags = *rti.this_arg;
-	break;
-      case IEEE80211_RADIOTAP_DBM_ANTSIGNAL:
-#if 0
-	dbm_last[adapter_no] = dbm[adapter_no];
-	dbm[adapter_no] = (int8_t)(*rti.this_arg);
-
-	if (dbm[adapter_no] > dbm_last[adapter_no]) { // if we have a better signal than last time, ignore
-	  dbm[adapter_no] = dbm_last[adapter_no];
-	}
-
-	dbm_ts_now[adapter_no] = current_timestamp();
-	if (dbm_ts_now[adapter_no] - dbm_ts_prev[adapter_no] > 220) {
-	  dbm_ts_prev[adapter_no] = current_timestamp();
-	  rx_status->adapter[adapter_no].current_signal_dbm = dbm[adapter_no];
-	  dbm[adapter_no] = 99;
-	  dbm_last[adapter_no] = 99;
-	}
-#endif
-	break;
-      }
-    }
-
-    pcap_packet_data += rt_header_len + interface.n80211HeaderLength;
+  FECDecoderStats prev_stats = fec.stats();
+  while (!done) {
 
     // Ralink and Atheros both always supply the FCS to userspace, no need to check
     //if (prd.m_nRadiotapFlags & IEEE80211_RADIOTAP_F_FCS)
     //bytes -= 4;
 
-    // TODO: disable checksum handling in process_payload(), not needed since we have fscfail disabled
-    int checksum_correct = 1;
-
     //rx_status->adapter[adapter_no].received_packet_cnt++;
     //	rx_status->adapter[adapter_no].last_update = dbm_ts_now[adapter_no];
     //	fprintf(stderr,"lu[%d]: %lld\n",adapter_no,rx_status->adapter[adapter_no].last_update);
     //	rx_status->adapter[adapter_no].last_update = current_timestamp();
-    
-    //process_payload(pcap_packet_data, bytes, checksum_correct, block_buffer_list, adapter_no);
+
+    // Pull the next block off the message queue.
+    MsgBuffer buf = queue.pop();
 
     // Add this block to the FEC decoder.
     //++total_blocks;
-    switch (fec.add_block(pcap_packet_data)) {
-    case FECStatus::FEC_PARTIAL:
-      break;
-    case FECStatus::FEC_ERROR:
-      ++error_packets;
-      break;
-    case FECStatus::FEC_COMPLETE:
-      ++good_packets;
-
-      // Ensure the block lengths are reasonable.
-      if (fec.blocks().size() < nblocks) {
-	++error_packets;
-      } else {
-
-	// Verify that the block lengths seem reasonable.
-	bool sp_error = false;
-	for (size_t b = 0; !sp_error && (b < nblocks); ++b) {
-	  const uint8_t *block = fec.blocks()[b];
-	  uint32_t cur_block_size = *reinterpret_cast<const uint32_t*>(block);
-	  if (cur_block_size > block_size) {
-	    sp_error = true;
-	    ++error_packets;
-	  }
-	}
+    if (fec.add_block(buf->data()) == FECStatus::FEC_COMPLETE) {
 	
-	// Output the data blocks if they look reasonable.
-	struct sockaddr_in s;
-	memset(&s, '\0', sizeof(struct sockaddr_in));
-	s.sin_family = AF_INET;
-	s.sin_port = (in_port_t)htons(5600);
-	//s.sin_addr.s_addr = htonl(INADDR_BROADCAST);
-	s.sin_addr.s_addr = inet_addr("10.42.0.255");
-	if (!sp_error) {
-	  total_blocks += nblocks;
-	  const std::vector<uint8_t*> &blocks = fec.blocks();
-	  for (size_t b = 0; b < nblocks; ++b) {
-	    const uint8_t *block = blocks[b];
-	    uint32_t cur_block_size = *reinterpret_cast<const uint32_t*>(block);
-	    if (cur_block_size > 0) {
-	      //std::cout.write(reinterpret_cast<const char*>(block + 4), cur_block_size);
-	      sendto(sock, block + 4, cur_block_size, 0, (struct sockaddr *)&s,
-		     sizeof(struct sockaddr_in));
-	    }
-	    tx_bytes += cur_block_size;
-	  }
+      // Output the data blocks
+      const std::vector<uint8_t*> &blocks = fec.blocks();
+      for (size_t b = 0; b < nblocks; ++b) {
+	const uint8_t *block = blocks[b];
+	uint32_t cur_block_size = *reinterpret_cast<const uint32_t*>(block);
+	if (cur_block_size > 0) {
+	  //std::cout.write(reinterpret_cast<const char*>(block + 4), cur_block_size);
+	  sendto(sock, block + 4, cur_block_size, 0, (struct sockaddr *)&s,
+		 sizeof(struct sockaddr_in));
 	}
       }
     }
 
-    if ((cur_time() - prev_time) > 2.0) {
-      std::cerr << "Good: " << good_packets << "  bad: " << error_packets
-		<< "  blocks: " << total_blocks << "  Mbps: "
-		<< 8e-6 * tx_bytes / (cur_time() - prev_time) << std::endl;
+    double dur = (cur_time() - prev_time);
+    if (dur > 2.0) {
+      const FECDecoderStats &stats = fec.stats();
+      std::cerr << "Blocks: " << stats.total_blocks << "/" << stats.dropped_blocks << "-"
+		<< stats.total_blocks - prev_stats.total_blocks << "/"
+		<< stats.dropped_blocks - prev_stats.dropped_blocks
+		<< "  Packets: " << stats.total_packets << "/" << stats.dropped_packets << "-"
+		<< stats.total_packets - prev_stats.total_packets << "/"
+		<< stats.dropped_packets - prev_stats.dropped_packets 
+		<< "  Bytes: " << stats.bytes << "-" << stats.bytes - prev_stats.bytes
+		<< " (" << 8e-6 * static_cast<double>(stats.bytes - prev_stats.bytes) / dur
+		<< "Mbps)  Resets: " << stats.lost_sync << "-"
+		<< stats.lost_sync - prev_stats.lost_sync << std::endl;
       prev_time = cur_time();
-      tx_bytes = 0;
+      prev_stats = stats;
     }
   }
-
-#if 0
-  // Create a thread to send packets.
-  Queue<std::shared_ptr<std::vector<uint8_t >> > queue;
-  auto send_th = [&queue, sock]() {
-    double start = cur_time();
-    size_t count = 0;
-    size_t pkts = 0;
-
-    // Send message out of the send queue
-    while(1) {
-      std::shared_ptr<std::vector<uint8_t> > buf = queue.pop();
-      send(sock, buf->data(), buf->size(), 0);
-      count += buf->size();
-      ++pkts;
-      double cur = cur_time();
-      double dur = cur - start;
-      if (dur > 1.0) {
-	std::cerr << pkts << " " << 1e3 * dur / pkts << " " << count << " " << 8e-6 * count / dur
-		  << " " << queue.size() << std::endl;
-	start = cur;
-	count = pkts = 0;
-      }
-    }
-  };
-  std::thread send_thr(send_th);
-#endif
 }

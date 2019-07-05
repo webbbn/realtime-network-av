@@ -38,6 +38,17 @@ private:
   std::vector<uint8_t*> m_block_ptrs;
 };
 
+struct FECDecoderStats {
+  FECDecoderStats() : total_blocks(0), total_packets(0), dropped_blocks(0), dropped_packets(0),
+		      lost_sync(0), bytes(0) {}
+  size_t total_blocks;
+  size_t total_packets;
+  size_t dropped_blocks;
+  size_t dropped_packets;
+  size_t lost_sync;
+  size_t bytes;
+};
+
 class FECDecoder {
 public:
 
@@ -58,6 +69,10 @@ public:
 
   FECStatus add_block(const uint8_t *buf);
 
+  const FECDecoderStats &stats() const {
+    return m_stats;
+  }
+
 private:
   uint8_t m_num_blocks;
   uint8_t m_num_fec_blocks;
@@ -70,6 +85,7 @@ private:
   std::vector<uint8_t*> m_block_ptrs;
   std::vector<uint8_t*> m_fec_ptrs;
   std::set<uint8_t> m_set_blocks;
+  FECDecoderStats m_stats;
 
   void reset(uint32_t pn);
 

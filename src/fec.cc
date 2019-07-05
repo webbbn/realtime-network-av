@@ -101,9 +101,10 @@ void FECEncoder::encode(const uint8_t *buf, size_t buf_len) {
 FECDecoder::FECDecoder(uint8_t num_blocks, uint8_t num_fec_blocks, uint16_t block_size,
 		       bool interlieved) :
   m_num_blocks(num_blocks), m_num_fec_blocks(num_fec_blocks), m_block_size(block_size),
-  m_interlieved(interlieved), m_buf((num_blocks + num_fec_blocks) * block_size),
-  m_block_ptrs(num_blocks + num_fec_blocks), m_packet_num(0), m_prev_seq_num(0),
-  m_bad_seq_count(0) {
+  m_interlieved(interlieved), m_packet_num(0), m_prev_seq_num(0), m_bad_seq_count(0),
+  m_buf((num_blocks + num_fec_blocks) * block_size),
+  
+  m_block_ptrs(num_blocks + num_fec_blocks) {
 
   // Ensure that the FEC library is initialized
   fec_init();
@@ -119,17 +120,22 @@ FECStatus FECDecoder::add_block(const uint8_t *buf) {
 
   // The first 32 bits in the data should be a sequence number.
   uint32_t seq_num = ((uint32_t*)buf)[0];
+  ++m_stats.total_blocks;
 
   // Make sure the sequence number is reasonable.
   if ((m_prev_seq_num != 0) && ((seq_num < m_prev_seq_num) || (seq_num > (m_prev_seq_num + 10)))) {
     if (++m_bad_seq_count > 8) {
-      std::cerr << "e0: " << m_prev_seq_num << std::endl;
+      ++m_stats.lost_sync;
+      ++m_stats.dropped_packets;
+      ++m_stats.total_packets;
+      std::cerr << "reset: " << seq_num << " " << m_prev_seq_num << std::endl;
       reset(0);
       m_prev_seq_num = 0;
       return FEC_ERROR;
     }
     return FEC_PARTIAL;
   }
+  m_stats.dropped_blocks += ((seq_num - m_prev_seq_num) - 1);
   m_prev_seq_num = seq_num;
 
   // The packet number is the sequence number / number of blocks in a packet
@@ -151,8 +157,9 @@ FECStatus FECDecoder::add_block(const uint8_t *buf) {
     memcpy(m_block_ptrs[ibn], buf + sizeof(uint32_t), m_block_size);
     m_set_blocks.insert(ibn);
   } else if (pn > m_packet_num) {
-    std::cerr << "e1: " << m_set_blocks.size() << std::endl;
     // We must not have received enough blocks to decode this packet.
+    ++m_stats.dropped_packets;
+    ++m_stats.total_packets;
     reset(pn);
     return FEC_ERROR;
   }
@@ -161,13 +168,14 @@ FECStatus FECDecoder::add_block(const uint8_t *buf) {
   if (m_set_blocks.size() == m_num_blocks) {
 
     // Decoce the block.
-    decode();
+    bool decode_error = decode();
+    ++m_stats.total_packets;
 
     // Start waiting for blocks from the next packet.
     reset(pn + 1);
 
     // Assume success
-    return FEC_COMPLETE;
+    return decode_error ? FEC_ERROR : FEC_COMPLETE;
   }
   return FEC_PARTIAL;
 }
@@ -175,7 +183,6 @@ FECStatus FECDecoder::add_block(const uint8_t *buf) {
 bool FECDecoder::decode() {
 
   // Create the erased blocks array and the FEC blocks array
-  uint8_t count = 0;
   std::vector<unsigned int> erased_block_idxs;
   for (size_t i = 0; i < m_num_blocks; ++i) {
     if (m_set_blocks.find(i) == m_set_blocks.end()) {
@@ -199,6 +206,26 @@ bool FECDecoder::decode() {
 	     fec_block_idxs.data(),
 	     erased_block_idxs.data(),
 	     erased_block_idxs.size());
+
+  // Verify that the lengths are all in range.
+  bool error = false;
+  size_t bytes = 0;
+  for (size_t i = 0; i < m_num_blocks; ++i) {
+    uint32_t *p32 = reinterpret_cast<uint32_t*>(m_block_ptrs[i]);
+    if (*p32 > (m_block_size - 4)) {
+      error = true;
+      ++m_stats.dropped_blocks;
+    } else {
+      bytes += *p32;
+    }
+  }
+  if (error) {
+    return false;
+  }
+
+  m_stats.bytes += bytes;
+
+  return true;
 }
 
 void FECDecoder::reset(uint32_t pn) {
