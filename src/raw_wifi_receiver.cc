@@ -398,8 +398,8 @@ int main(int argc, const char** argv) {
 	uint32_t cur_block_size = *reinterpret_cast<const uint32_t*>(block);
 	if (cur_block_size > 0) {
 	  //std::cout.write(reinterpret_cast<const char*>(block + 4), cur_block_size);
-	  sendto(sock, block + 4, cur_block_size, 0, (struct sockaddr *)&s,
-		 sizeof(struct sockaddr_in));
+	  //sendto(sock, block + 4, cur_block_size, 0, (struct sockaddr *)&s,
+	  //sizeof(struct sockaddr_in));
 	}
       }
     }

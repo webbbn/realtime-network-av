@@ -123,7 +123,7 @@ FECStatus FECDecoder::add_block(const uint8_t *buf) {
   ++m_stats.total_blocks;
 
   // Make sure the sequence number is reasonable.
-  if ((m_prev_seq_num != 0) && ((seq_num < m_prev_seq_num) || (seq_num > (m_prev_seq_num + 10)))) {
+  if ((m_prev_seq_num != 0) && ((seq_num <= m_prev_seq_num) || (seq_num > (m_prev_seq_num + 10)))) {
     if (++m_bad_seq_count > 8) {
       ++m_stats.lost_sync;
       ++m_stats.dropped_packets;
