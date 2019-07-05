@@ -140,6 +140,7 @@ bool receive_packet(monitor_interface_t &interface, MsgQueue &msg_queue) {
   uint8_t const *pcap_packet_data = NULL;
   while (1) {
 
+/*
     // Wait until a packet is available.
     fd_set readset;
     struct timeval to;
@@ -153,6 +154,7 @@ bool receive_packet(monitor_interface_t &interface, MsgQueue &msg_queue) {
     if(!FD_ISSET(interface.selectable_fd, &readset)) {
       continue;
     }
+*/
 
     // Recieve the next packet
     int retval = pcap_next_ex(interface.ppcap, &pcap_packet_header, &pcap_packet_data);

@@ -135,7 +135,10 @@ FECStatus FECDecoder::add_block(const uint8_t *buf) {
     }
     return FEC_PARTIAL;
   }
-  m_stats.dropped_blocks += ((seq_num - m_prev_seq_num) - 1);
+  if ((m_prev_seq_num > 0) && (seq_num > (m_prev_seq_num + 1))) {
+    uint32_t diff = seq_num - m_prev_seq_num - 1;
+    m_stats.dropped_blocks += diff;
+  }
   m_prev_seq_num = seq_num;
 
   // The packet number is the sequence number / number of blocks in a packet
