@@ -147,15 +147,15 @@ class FECUDPOutputStream(object):
 
 class WFBOutputStream(object):
 
-    def __init__(self, dev, code_blocks = 8, fec_blocks = 4, maxpacket = 1024):
+    def __init__(self, dev, port = 0, code_blocks = 8, fec_blocks = 4, block_size = 1024, output = None):
         self.log = FPSLogger()
         self.code_blocks = code_blocks
         self.fec_blocks = fec_blocks
-        self.maxpacket = maxpacket
+        self.block_size = block_size
         self.dev = dev
-        self.frame_id = 0
+        self.port = port # The output port on the other side of the link.
         self.seq_id = 0;
-        self.fec = fec.PyFECEncoder(self.code_blocks, self.fec_blocks, self.maxpacket, True)
+        self.fec = fec.PyFECEncoder(self.code_blocks, self.fec_blocks, self.block_size, True)
 
         # Create the radiotap headerb"\x00\x00\x0c\x00\0x04\0x80\0x00\0x00\0x16\0x00\0x00"
         self.rt_header = bytearray([0x00, 0x00, # radiotap version
@@ -169,10 +169,12 @@ class WFBOutputStream(object):
                                       # port = 1st byte of IEEE802.11 RA (mac) must be something odd
                                       # (wifi hardware determines broadcast/multicast through odd/even check)
 	                              0x01, 0x00, 0x00, 0x00, 0x00, 0x00,
-	                              0x13, 0x22, 0x33, 0x44, 0x55, 0x66, # mac
+	                              0x13, 0x22, 0x33, 0x44, 0x00, 0x00, # mac (last two bytes are the port number)
 	                              0x13, 0x22, 0x33, 0x44, 0x55, 0x66, # mac
                                       # IEEE802.11 seqnum, (will be overwritten later by Atheros firmware/wifi chip)
 	                              0x00, 0x00])
+        self.ieee_header[14] = (port >> 8) & 0xff
+        self.ieee_header[15] = port & 0xff
 
         # Create the communication socket
         self.sock = socket.socket(socket.AF_PACKET, socket.SOCK_RAW)
@@ -180,11 +182,21 @@ class WFBOutputStream(object):
         # Bind to the socket
         self.sock.bind((self.dev, 0))
 
+        # Open the output file if requested
+        if output:
+            self.of = open(output, mode="wb")
+            logging.info("Saving video to " + output)
+        else:
+            self.of = None
+
     def write(self, s):
+
         # Encode the packet
         self.fec.encode(s)
+
         # Retrieve the encoded blocks
         blocks = self.fec.get_blocks()
+
         # Trasmit the blocks
         count = 0
         for block in blocks:
@@ -193,6 +205,10 @@ class WFBOutputStream(object):
             self.sock.send(msg)
             count += len(block)
         self.log.log(count, len(blocks))
+
+        # Write the data to the output file if one was requested
+        if self.of:
+            self.of.write(s)
 
 class UDSOutputStream(object):
 
@@ -274,7 +290,7 @@ class Camera(object):
         elif protocol.upper() == "FECUDP":
             self.stream = FECUDPOutputStream(host, port, broadcast=True)
         elif protocol.upper() == "WFB":
-            self.stream = WFBOutputStream(host)
+            self.stream = WFBOutputStream(dev, port, data_blocks, fec_blocks, block_size, output)
         elif protocol.upper() == "UDS":
             self.stream = UDSOutputStream()
             count = 0
@@ -394,8 +410,11 @@ if __name__ == '__main__':
     parser.add_argument("-rq", "--rec_quality", default=20, help="the recording encoding quality")
     parser.add_argument("-o", "--output", help="the output (recorded) video filename")
     parser.add_argument("-ho", "--host", help="the hostname/IP/address to stream the video to")
-    parser.add_argument("-p", "--port", help="the port to stream the video to")
+    parser.add_argument("-p", "--port", default=0, help="the port to stream the video to")
     parser.add_argument("-de", "--dev", help="the wifi device to send raw packets to")
+    parser.add_argument("-db", "--data_blocks", default=8, help="the number of data blocks used in FEC encoding")
+    parser.add_argument("-fb", "--fec_blocks", default=4, help="the number of FEC blocks used in FEC encoding")
+    parser.add_argument("-bs", "--block_size", default=1024, help="the block size used in FEC encoding")
     parser.add_argument("protocol", help="the network protocol to use (UDP | UDPB (Broadcast) | TCP | SRT | FECUDP | UDS | WFB)")
 
     # Parse the options
@@ -422,18 +441,18 @@ if __name__ == '__main__':
     rec_q = int(args.rec_quality)
     output = args.output
     host = args.host
+    port = int(args.port)
     dev = args.dev
+    data_blocks = args.data_blocks
+    fec_blocks = args.fec_blocks
+    block_size = args.block_size
     if protocol == "WFB":
         if args.dev == "":
             print("Must specify the wifi device (-de/--dev) when using WFB protocol")
             exit(1)
         else:
-            # For now, stuff the device in the host parameter.
-            host = dev
-            host_port = host
-            port = 0
-    elif args.port:
-        port = int(args.port)
+            host_port = dev + ":" + str(port)
+    elif port > 0:
         host_port = host + ":" + str(port)
     else:
         port = None

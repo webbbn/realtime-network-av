@@ -20,8 +20,7 @@ void FECEncoder::encode(const uint8_t *buf, size_t buf_len) {
   size_t n_sub_frames = ceil(double(buf_len) / sub_frame_size);
   size_t num_blocks = n_sub_frames * (m_num_blocks + m_num_fec_blocks);
   size_t nbytes = num_blocks * (block_size + 8);
-  //std::cerr << "aaa: " << buf_len << " " << block_size << " " << sub_frame_size
-  //<< " " << n_sub_frames << " " << num_blocks << " " << nbytes << std::endl;
+
   // Create the data buffers for storing the data blocks and FEC blocks
   m_block_ptrs.resize(num_blocks);
   m_buf.resize(nbytes);
@@ -42,9 +41,9 @@ void FECEncoder::encode(const uint8_t *buf, size_t buf_len) {
       // Get a pointer to this block
       uint8_t *ptr = m_block_ptrs[i * (m_num_blocks + m_num_fec_blocks) + j];
 
-      // First copy the sequence number and length into the buffer.
+      // First copy the length into the buffer.
       uint32_t *lbuf = reinterpret_cast<uint32_t*>(ptr);
-      lbuf[1] = sf_len;
+      lbuf[1] = static_cast<uint32_t>(sf_len);
 
       // Copy the packet data if necessary.
       memcpy(ptr + 8, buf + sf_idx, sf_len);
