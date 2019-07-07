@@ -324,6 +324,7 @@ int main(int argc, char* argv[]) {
 	done |= check_for_quit();
       }
 */
+
     }
 
     draw_thread.join();

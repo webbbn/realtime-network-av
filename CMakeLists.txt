@@ -94,11 +94,7 @@ add_subdirectory(modules/dcadec)
 
 # To find and use ffmpeg avcodec library
 find_package(FFmpeg)
-COMPARE_VERSION_STR(valid_avcodec ${AVCODEC_VERSION} "60.0")
-if (0 LESS ${valid_avcodec})
-  include_directories(${AVCODEC_INCLUDE_DIR})
-  set(USE_AVCODEC true)
-endif ()
+include_directories(${AVCODEC_INCLUDE_DIR})
 find_path(DCADEC_INCLUDE_DIR libdcadec/common.h PATHS ${PROJECT_SOURCE_DIR}/modules/dcadec)
 find_library(DCADEC_LIBRARY dcacec PATHS ${PROJECT_SOURCE_DIR}/modules/dcadec)
 include_directories(${DCADEC_INCLUDE_DIR})
@@ -111,21 +107,19 @@ find_library(SDL2_GFX_LIBRARY SDL2_gfx)
 # Add the mavlink directory to the include path
 include_directories(${PROJECT_SOURCE_DIR}/modules/mavlink/common)
 
-if (USE_AVCODEC)
-  include_directories(${SDL2_INCLUDE_DIRS} ${SRT_SOURCE_DIR}/srtcore ${SRT_SOURCE_DIR}/common ${SRT_BINARY_DIR} ${PROJECT_BINARY_DIR}/sdl/include)
-  link_directories(${PROJECT_BINARY_DIR})
-  add_executable(video_stream_player
-    src/video_stream_player.cc
-    src/telemetry.cc
-    src/texture.cc
-    src/ffmpeg_decoder.cc
-    src/sdl_osd.cc
-    src/sdl_render_window.cc
-    src/transmitter.cc
-    src/fec.c)
-  target_link_libraries(video_stream_player ${AVCODEC_LIBRARY} ${AVFORMAT_LIBRARY} ${AVUTIL_LIBRARY} ${SWSCALE_LIBRARY} ${SDL2_LIBRARIES} ${SDL2_TTF_LIBRARY} ${SDL2_IMAGE_LIBRARY} ${SDL2_GFX_LIBRARY} ${Boost_LIBRARIES} ${Extra_Libraries} srt_shared ssl crypto)
-  install(TARGETS video_stream_player DESTINATION bin COMPONENT applications)
-endif ()
+include_directories(${SDL2_INCLUDE_DIRS} ${SRT_SOURCE_DIR}/srtcore ${SRT_SOURCE_DIR}/common ${SRT_BINARY_DIR} ${PROJECT_BINARY_DIR}/sdl/include)
+link_directories(${PROJECT_BINARY_DIR})
+add_executable(video_stream_player
+  src/video_stream_player.cc
+  src/telemetry.cc
+  src/texture.cc
+  src/ffmpeg_decoder.cc
+  src/sdl_osd.cc
+  src/sdl_render_window.cc
+  src/transmitter.cc
+  src/fec.c)
+target_link_libraries(video_stream_player ${AVCODEC_LIBRARIES} ${AVFORMAT_LIBRARIES} ${AVUTIL_LIBRARIES} ${SWSCALE_LIBRARIES} ${SDL2_LIBRARIES} ${SDL2_TTF_LIBRARY} ${SDL2_IMAGE_LIBRARY} ${SDL2_GFX_LIBRARY} ${Boost_LIBRARIES} ${Extra_Libraries} srt_shared ssl crypto)
+install(TARGETS video_stream_player DESTINATION bin COMPONENT applications)
 
 find_library(V4L_LIBRARY v4l2)
 if (V4L_LIBRARY)
@@ -161,11 +155,11 @@ if (OPENMAXIL_LIBRARY)
   install(TARGETS rpi_video_player DESTINATION bin COMPONENT applications)
 endif ()
 
-add_executable(raw_wifi_bridge src/raw_wifi_bridge.cc)
+add_executable(raw_wifi_bridge src/raw_wifi_bridge.cc src/raw_socket.cc src/radiotap.c)
 install(TARGETS raw_wifi_bridge DESTINATION bin COMPONENT applications)
 target_link_libraries(raw_wifi_bridge ${Boost_LIBRARIES} pcap pthread)
 
-add_executable(raw_wifi_receiver src/raw_wifi_receiver.cc src/radiotap.c src/fec.c src/fec.cc)
+add_executable(raw_wifi_receiver src/raw_wifi_receiver.cc src/raw_socket.cc src/radiotap.c src/fec.c src/fec.cc)
 install(TARGETS raw_wifi_receiver DESTINATION bin COMPONENT applications)
 target_link_libraries(raw_wifi_receiver ${Boost_LIBRARIES} pcap pthread)
 

@@ -6,7 +6,7 @@ import struct
 import zlib
 from libc.string cimport memcpy
 from libc.stdlib cimport malloc, free
-from libc.stdint cimport uint8_t, uint16_t
+from libc.stdint cimport uint8_t, uint16_t, uint32_t
 from libcpp.map cimport map
 from libcpp.string cimport string
 from libcpp.vector cimport vector
@@ -39,7 +39,7 @@ cdef extern from 'fec.hh':
         uint8_t nblocks()
         uint8_t nfecblocks()
         vector[uint8_t*] blocks()
-        int add_block(const uint8_t * buf)
+        int add_block(const uint8_t * buf, uint32_t seq_num)
 
     cdef cppclass FECEncoder:
         FECEncoder(uint8_t num_blocks, uint8_t num_fec_blocks, uint16_t block_size, uint8_t interlieved)
@@ -60,8 +60,8 @@ cdef class PyFECDecode:
         self.m_dec = FECDecoder(num_blocks, num_fec_blocks, block_size, interlieved)
         self.m_block_size = block_size
 
-    def add_block(self, buf):
-        return self.m_dec.add_block(buf)
+    def add_block(self, buf, seq_num):
+        return self.m_dec.add_block(buf, seq_num)
 
     def get_blocks(self):
         ret = []

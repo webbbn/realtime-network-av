@@ -114,11 +114,8 @@ FECDecoder::FECDecoder(uint8_t num_blocks, uint8_t num_fec_blocks, uint16_t bloc
   }
 }
 
-FECStatus FECDecoder::add_block(const uint8_t *buf) {
+FECStatus FECDecoder::add_block(const uint8_t *buf, uint32_t seq_num) {
   uint32_t nblocks = m_num_blocks + m_num_fec_blocks;
-
-  // The first 32 bits in the data should be a sequence number.
-  uint32_t seq_num = ((uint32_t*)buf)[0];
   ++m_stats.total_blocks;
 
   // Make sure the sequence number is reasonable.
@@ -156,7 +153,7 @@ FECStatus FECDecoder::add_block(const uint8_t *buf) {
 	ibn = (bn - m_num_fec_blocks);
       }
     }
-    memcpy(m_block_ptrs[ibn], buf + sizeof(uint32_t), m_block_size);
+    memcpy(m_block_ptrs[ibn], buf, m_block_size);
     m_set_blocks.insert(ibn);
   } else if (pn > m_packet_num) {
     // We must not have received enough blocks to decode this packet.
