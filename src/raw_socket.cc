@@ -132,16 +132,21 @@ uint8_t *RawSendSocket::send_buffer() {
   return m_send_buf.data() + m_hdr_len;
 }
 
-bool RawSendSocket::send(size_t msglen) {
+bool RawSendSocket::send(size_t msglen, uint16_t port) {
   // Insert the current sequence number.
-  uint32_t *ptr = reinterpret_cast<uint32_t*>(m_send_buf.data() + m_hdr_len - sizeof(m_seq_num));
+  uint32_t *ptr = reinterpret_cast<uint32_t*>(send_buffer() - sizeof(m_seq_num));
+  // Set the sequence number
   *ptr = m_seq_num;
+  ++m_seq_num;
+  // Set the port number
+  m_send_buf.data()[sizeof(radiotap_header) + 14] = (port >> 8) & 0xff;
+  m_send_buf.data()[sizeof(radiotap_header) + 15] = port & 0xff;
   return (::send(m_sock, m_send_buf.data(), msglen + m_hdr_len, 0) >= 0);
 }
 
-bool RawSendSocket::send(const uint8_t *msg, size_t msglen) {
+bool RawSendSocket::send(const uint8_t *msg, size_t msglen, uint16_t port) {
   memcpy(send_buffer(), msg, msglen);
-  return send(msglen);
+  return send(msglen, port);
 }
 
 /******************************************************************************

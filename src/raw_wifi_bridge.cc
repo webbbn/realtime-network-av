@@ -64,6 +64,12 @@ private:
   std::condition_variable m_cond;
 };
 
+struct Message {
+  Message(size_t max_packet, uint16_t p) : msg(max_packet), port(p) { }
+  uint16_t port;
+  std::vector<uint8_t> msg;
+};
+
 std::string hostname_to_ip(const std::string &hostname) {
 
   // Try to lookup the host.
@@ -107,7 +113,7 @@ int open_udp_socket_for_rx(int port, const std::string hostname = "") {
     ip = hostname_to_ip(hostname);
     saddr.sin_addr.s_addr = inet_addr(ip.c_str());
   } else {
-    saddr.sin_addr.s_addr = htonl(INADDR_ANY);
+    saddr.sin_addr.s_addr = INADDR_ANY;
   }
 
   if (bind(fd, (struct sockaddr *)&saddr, sizeof(saddr)) < 0) {
@@ -126,7 +132,6 @@ double cur_time() {
 
 int main(int argc, const char** argv) {
 
-  std::string hostname;
   po::options_description desc("Allowed options");
   desc.add_options()
     ("help,h", "produce help message")
@@ -142,9 +147,8 @@ int main(int argc, const char** argv) {
      "the input/output UDP port(s) or host:port(s)")
     ;
   po::positional_options_description p;
-  p.add("dir", 1);
   p.add("device", 1);
-  p.add("port", -11);
+  p.add("port", -1);
 
   po::options_description all_options("Allowed options");
   all_options.add(desc).add(pos);
@@ -162,66 +166,105 @@ int main(int argc, const char** argv) {
 
   // Open the raw socket
   RawSendSocket raw_sock;
-  if (raw_sock.error()) {
+  if (!raw_sock.add_device(device)) {
     std::cerr << "Error opeing the raw socket for transmiting.\n";
     std::cerr << "  " << raw_sock.error_msg() << std::endl;
     return EXIT_FAILURE;
   }
 
-  // Open the UDP receive sockets.
-  std::vector<int> udp_socks;
-  for (auto &port : ports) {
-    size_t split = port.find(':');
-    int cport;
-    std::string hostname;
-    if (split == port.length()) {
-      cport = std::atoi(port.c_str());
-    } else {
-      cport = std::atoi(port.substr(0, split).c_str());
-      hostname = port.substr(split + 1, port.length() - split).c_str();
-    }
-    std::cerr << cport << " " << hostname << std::endl;
-    int udp_sock = open_udp_socket_for_rx(cport, hostname);
-    if (udp_sock < 0) {
-      std::cerr << "Error opening the UDP socket.\n";
-      return EXIT_FAILURE;
-    } else {
-      udp_socks.push_back(udp_sock);
-    }
-  }
-
   // Create a thread to send packets.
-  Queue<std::shared_ptr<std::vector<uint8_t >> > queue;
+  Queue<std::shared_ptr<Message> > queue;
   auto send_th = [&queue, &raw_sock]() {
     double start = cur_time();
     size_t count = 0;
     size_t pkts = 0;
+    size_t max_packet = 0;
 
     // Send message out of the send queue
     while(1) {
-      std::shared_ptr<std::vector<uint8_t> > buf = queue.pop();
-      raw_sock.send(*buf);
-      count += buf->size();
+      std::shared_ptr<Message> msg = queue.pop();
+      raw_sock.send(msg->msg, msg->port);
+      count += msg->msg.size();
+      max_packet = std::max(msg->msg.size(), max_packet);
       ++pkts;
       double cur = cur_time();
       double dur = cur - start;
-      if (dur > 1.0) {
-	std::cerr << pkts << " " << 1e3 * dur / pkts << " " << count << " " << 8e-6 * count / dur
-		  << " " << queue.size() << std::endl;
+      if (dur > 2.0) {
+	std::cerr << " Packets/sec: " << int(pkts / dur)
+		  << " Mbps: " << 8e-6 * count / dur
+		  << " Queue size: " << queue.size()
+		  << " Max packet: " << max_packet << std::endl;
 	start = cur;
-	count = pkts = 0;
+	count = pkts = max_packet = 0;
       }
     }
   };
   std::thread send_thr(send_th);
 
+#if 0
   // Retrieve messages off the UDP socket.
   while (1) {
-    // Support more than one socket!
-    std::shared_ptr<std::vector<uint8_t> > recv_buf(new std::vector<uint8_t>(max_packet));
-    size_t count = recv(udp_socks[0], recv_buf->data(), max_packet, 0);
-    if (count) {
-      queue.push(recv_buf);
+
+    // Wait until a socket has a packet on it.
+    std::cerr << "max_sock: " << max_sock << std::endl;
+    if (select(max_sock + 1, &sock_fds, (fd_set *)0, (fd_set *)0, 0) >= 0) {
+      std::cerr << "select\n";
+      for (size_t i = 0; i < udp_socks.size(); ++i) {
+	std::cerr << "is set: " << udp_socks[i] << std::endl;
+	if (FD_ISSET(udp_socks[i], &sock_fds)) {
+	  std::cerr << "recv: " << udp_socks[i] << std::endl;
+	  std::shared_ptr<Message> msg(new Message(max_packet, udp_ports[i]));
+	  size_t count = recv(udp_socks[i], msg->msg.data(), max_packet, 0);
+	  std::cerr << "count: " << udp_socks[i] << " " << count << std::endl;
+	  if (count > 0) {
+	    msg->msg.resize(count);
+	    queue.push(msg);
+	  }
+	}
+      }
     }
   }
+#endif
+
+  // Open the UDP receive sockets.
+  std::vector<std::shared_ptr<std::thread> > thrs;
+  for (auto &port : ports) {
+
+    // Parse the hostname and port out of the string
+    size_t split = port.find(':');
+    int cport;
+    std::string hostname;
+    if (split == std::string::npos) {
+      // No hostname found, so just parse the integer port.
+      cport = std::atoi(port.c_str());
+    } else {
+      hostname = port.substr(0, split).c_str();
+      cport = std::atoi(port.substr(split + 1, port.length() - split).c_str());
+    }
+    int udp_sock = open_udp_socket_for_rx(cport, hostname);
+    if (udp_sock < 0) {
+      std::cerr << "Error opening the UDP socket.\n";
+      return EXIT_FAILURE;
+    }
+
+    auto uth = [udp_sock, cport, &queue]() {
+      while (1) {
+	std::shared_ptr<Message> msg(new Message(max_packet, cport));
+	size_t count = recv(udp_sock, msg->msg.data(), max_packet, 0);
+	if (count > 0) {
+	  msg->msg.resize(count);
+	  queue.push(msg);
+	}
+      }
+    };
+
+    thrs.push_back(std::shared_ptr<std::thread>(new std::thread(uth)));
+  }
+
+  for(auto th : thrs) {
+    th->join();
+  }
+  send_thr.join();
+
+  return EXIT_SUCCESS;
 }

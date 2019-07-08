@@ -34,12 +34,12 @@ public:
   uint8_t *send_buffer();
 
   // Send a message from the internal message buffer.
-  bool send(size_t msglen);
+  bool send(size_t msglen, uint16_t port);
 
   // Copy the message into the send bufer and send it.
-  bool send(const uint8_t *msg, size_t msglen);
-  bool send(const std::vector<uint8_t> &msg) {
-    return send(msg.data(), msg.size());
+  bool send(const uint8_t *msg, size_t msglen, uint16_t port);
+  bool send(const std::vector<uint8_t> &msg, uint16_t port) {
+    return send(msg.data(), msg.size(), port);
   }
 
   const std::string &error_msg() const {
