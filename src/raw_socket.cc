@@ -326,7 +326,7 @@ bool RawReceiveSocket::receive(monitor_message_t &msg) {
     uint32_t diff = seq_num - m_stats.prev_good_seq_num;
     if (diff < 5) {
       // This likely means we dropped a few packets.
-      m_stats.dropped_packets += diff;
+      m_stats.dropped_packets += (diff - 1);
       m_stats.cur_error_count = 0;
       m_stats.prev_good_seq_num = seq_num;
     } else {
