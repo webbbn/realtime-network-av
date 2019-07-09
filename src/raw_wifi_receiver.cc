@@ -16,100 +16,18 @@
 #include <iostream>
 #include <string>
 #include <vector>
-#include <mutex>
-#include <condition_variable>
-#include <queue>
 #include <memory>
 #include <thread>
-#include <limits>
 #include <set>
 
 #include <boost/program_options.hpp>
 
+#include <stats_accumulator.hh>
+#include <shared_queue.hh>
 #include <raw_socket.hh>
 #include <fec.hh>
 
-template <typename tmpl__T>
-class Queue {
-public:
-  Queue() = default;
-  ~Queue() = default;
-
-  tmpl__T pop() {
-    std::unique_lock<std::mutex> lock_guard(m_mutex);
-
-    while (m_queue.empty()) {
-      m_cond.wait(lock_guard);
-    }
-
-    auto item = m_queue.front();
-    m_queue.pop();
-    return item;
-  }
-
-  void push(tmpl__T item) {
-    std::unique_lock<std::mutex> lock_guard(m_mutex);
-    m_queue.push(item);
-    lock_guard.unlock();
-    m_cond.notify_one();
-  }
-
-  size_t size() const {
-    return m_queue.size();
-  }
-
-private:
-  std::queue<tmpl__T> m_queue;
-  std::mutex m_mutex;
-  std::condition_variable m_cond;
-};
-
-template <typename tmpl__T>
-class StatsAccum {
-public:
-  StatsAccum() {
-    reset();
-  }
-
-  void add(tmpl__T v) {
-    m_min = std::min(m_min, v);
-    m_max = std::max(m_max, v);
-    m_sum += v;
-    ++m_count;
-  }
-  tmpl__T min() {
-    return m_min;
-  }
-  tmpl__T max() {
-    return m_max;
-  }
-
-  double sum() {
-    return m_sum;
-  }
-  size_t count() {
-    return m_count;
-  }
-
-  double mean() {
-    return m_sum / m_count;
-  }
-
-  void reset() {
-    m_min = std::numeric_limits<tmpl__T>::max();
-    m_max = std::numeric_limits<tmpl__T>::lowest();
-    m_sum = 0;
-    m_count = 0;
-  }
-
-private:
-  tmpl__T m_min;
-  tmpl__T m_max;
-  double m_sum;
-  uint32_t m_count;
-};
-
-typedef Queue<std::shared_ptr<monitor_message_t> > MsgQueue;
+typedef SharedQueue<std::shared_ptr<monitor_message_t> > MsgQueue;
 
 std::string hostname_to_ip(const std::string &hostname) {
 
@@ -145,11 +63,11 @@ int main(int argc, const char** argv) {
   desc.add_options()
     ("help,h", "produce help message")
     ("debug,D", "print debug messages")
-    ("blocks_size,B", po::value<uint16_t>(&block_size)->default_value(1024),
+    ("blocks_size,b", po::value<uint16_t>(&block_size)->default_value(1024),
      "the size of the FEC blocks")
-    ("nblocks,N", po::value<uint16_t>(&nblocks)->default_value(8),
+    ("nblocks,n", po::value<uint16_t>(&nblocks)->default_value(8),
      "the number of data blockes used in encoding")
-    ("nfec_blocks,K", po::value<uint16_t>(&nfec_blocks)->default_value(4),
+    ("nfec_blocks,k", po::value<uint16_t>(&nfec_blocks)->default_value(4),
      "the number of FEC blockes used in encoding")
     ;
 
@@ -211,7 +129,7 @@ int main(int argc, const char** argv) {
   bool done = false;
   auto recv = [&raw_sock, &queue, &done]() {
     double prev_time = cur_time();
-    StatsAccum<int8_t> rssi_stats;
+    StatsAccumulator<int8_t> rssi_stats;
     RawReceiveStats prev_stats;
     while(!done) {
       std::shared_ptr<monitor_message_t> msg(new monitor_message_t);
@@ -226,15 +144,16 @@ int main(int argc, const char** argv) {
 	  if (prev_stats.packets == 0) {
 	    prev_stats = stats;
 	  }
-	  std::cerr << "Packets: " << stats.packets - prev_stats.packets << " (D:"
-		    << stats.dropped_packets - prev_stats.dropped_packets << " E:"
-		    << stats.error_packets - prev_stats.error_packets
-		    << ")  MB: " << static_cast<float>(stats.bytes) * 1e-6
-		    << " (" << static_cast<float>(stats.bytes - prev_stats.bytes) * 1e-6
-		    << " - " << 8e-6 * static_cast<double>(stats.bytes - prev_stats.bytes) / dur
-		    << " Mbps)  Resets: " << stats.resets << "-" << stats.resets - prev_stats.resets
-		    << "  RSSI: " << static_cast<int16_t>(rint(rssi_stats.mean())) << " ("
-		    << static_cast<int16_t>(rssi_stats.min()) << "/"
+	  std::cerr
+	    << "Packets: " << stats.packets - prev_stats.packets << " (D:"
+	    << stats.dropped_packets - prev_stats.dropped_packets << " E:"
+	    << stats.error_packets - prev_stats.error_packets
+	    << ")  MB: " << static_cast<float>(stats.bytes) * 1e-6
+	    << " (" << static_cast<float>(stats.bytes - prev_stats.bytes) * 1e-6
+	    << " - " << 8e-6 * static_cast<double>(stats.bytes - prev_stats.bytes) / dur
+	    << " Mbps)  Resets: " << stats.resets << "-" << stats.resets - prev_stats.resets
+	    << "  RSSI: " << static_cast<int16_t>(rint(rssi_stats.mean())) << " ("
+	    << static_cast<int16_t>(rssi_stats.min()) << "/"
 	    << static_cast<int16_t>(rssi_stats.max()) << ")\n";
 	  prev_stats = stats;
 	  rssi_stats.reset();
@@ -290,7 +209,8 @@ int main(int argc, const char** argv) {
 	    //std::cout.write(reinterpret_cast<const char*>(block + 4), cur_block_size);
 	    s.sin_port = (in_port_t)htons(buf->port);
 	    sendto(sock, block + 4, cur_block_size, 0, (struct sockaddr *)&s,
-		   sizeof(struct sockaddr_in));
+	    sizeof(struct sockaddr_in));
+	    usleep(1000);
 	  }
 	}
       }
@@ -300,7 +220,7 @@ int main(int argc, const char** argv) {
 	// Combine all decoder stats.
 	const FECDecoderStats &stats = fec->stats();
 	std::cerr
-	  << "Decode errors: "
+	  << "Decode stats: "
 	  << stats.total_packets - prev_stats.total_packets << " / "
 	  << stats.dropped_packets - prev_stats.dropped_packets << std::endl;
 	prev_time = cur_time();
