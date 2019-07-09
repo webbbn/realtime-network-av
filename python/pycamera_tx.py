@@ -86,7 +86,7 @@ class SRTOutputStream(object):
 
 class UDPOutputStream(object):
 
-    def __init__(self, host, port, broadcast = False, maxpacket = 1310):
+    def __init__(self, host, port, broadcast = False, maxpacket = 1024):
         self.log = FPSLogger()
         self.broadcast = broadcast
         self.maxpacket = maxpacket

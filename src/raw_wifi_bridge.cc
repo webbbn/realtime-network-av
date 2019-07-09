@@ -149,11 +149,11 @@ int main(int argc, const char** argv) {
     ("device", po::value<std::string>(&device), "the wifi device to use")
     ("port", po::value<std::vector<std::string> >(&ports),
      "the input/output UDP port(s) or host:port(s)")
-    ("blocks_size,B", po::value<uint16_t>(&block_size)->default_value(1024),
+    ("blocks_size,b", po::value<uint16_t>(&block_size)->default_value(1024),
      "the size of the FEC blocks")
-    ("nblocks,N", po::value<uint16_t>(&nblocks)->default_value(8),
+    ("nblocks,n", po::value<uint16_t>(&nblocks)->default_value(8),
      "the number of data blockes used in encoding")
-    ("nfec_blocks,K", po::value<uint16_t>(&nfec_blocks)->default_value(4),
+    ("nfec_blocks,k", po::value<uint16_t>(&nfec_blocks)->default_value(4),
      "the number of FEC blockes used in encoding")
     ;
   po::positional_options_description p;
