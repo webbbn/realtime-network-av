@@ -154,7 +154,6 @@ class WFBOutputStream(object):
         self.block_size = block_size
         self.dev = dev
         self.port = port # The output port on the other side of the link.
-        self.seq_id = 0;
         self.fec = fec.PyFECEncoder(self.code_blocks, self.fec_blocks, self.block_size, True)
 
         # Create the radiotap headerb"\x00\x00\x0c\x00\0x04\0x80\0x00\0x00\0x16\0x00\0x00"

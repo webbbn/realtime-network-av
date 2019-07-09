@@ -155,7 +155,7 @@ if (OPENMAXIL_LIBRARY)
   install(TARGETS rpi_video_player DESTINATION bin COMPONENT applications)
 endif ()
 
-add_executable(raw_wifi_bridge src/raw_wifi_bridge.cc src/raw_socket.cc src/radiotap.c)
+add_executable(raw_wifi_bridge src/raw_wifi_bridge.cc src/raw_socket.cc src/fec.c src/fec.cc src/radiotap.c)
 install(TARGETS raw_wifi_bridge DESTINATION bin COMPONENT applications)
 target_link_libraries(raw_wifi_bridge ${Boost_LIBRARIES} pcap pthread)
 

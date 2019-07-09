@@ -21,9 +21,10 @@
 #include <memory>
 #include <thread>
 
-#include <raw_socket.hh>
-
 #include <boost/program_options.hpp>
+
+#include <raw_socket.hh>
+#include <fec.hh>
 
 namespace po=boost::program_options;
 
@@ -140,11 +141,20 @@ int main(int argc, const char** argv) {
 
   std::string device;
   std::vector<std::string> ports;
+  uint16_t block_size;
+  uint16_t nblocks;
+  uint16_t nfec_blocks;
   po::options_description pos("Positional");
   pos.add_options()
     ("device", po::value<std::string>(&device), "the wifi device to use")
     ("port", po::value<std::vector<std::string> >(&ports),
      "the input/output UDP port(s) or host:port(s)")
+    ("blocks_size,B", po::value<uint16_t>(&block_size)->default_value(1024),
+     "the size of the FEC blocks")
+    ("nblocks,N", po::value<uint16_t>(&nblocks)->default_value(8),
+     "the number of data blockes used in encoding")
+    ("nfec_blocks,K", po::value<uint16_t>(&nfec_blocks)->default_value(4),
+     "the number of FEC blockes used in encoding")
     ;
   po::positional_options_description p;
   p.add("device", 1);
@@ -172,9 +182,15 @@ int main(int argc, const char** argv) {
     return EXIT_FAILURE;
   }
 
+  // Create the FEC encoder
+  std::shared_ptr<FECEncoder> enc;
+  if ((block_size > 0) && (nblocks > 0) && (nfec_blocks > 0)) {
+    enc.reset(new FECEncoder(nblocks, nfec_blocks, block_size, true));
+  }
+
   // Create a thread to send packets.
   Queue<std::shared_ptr<Message> > queue;
-  auto send_th = [&queue, &raw_sock]() {
+  auto send_th = [&queue, &raw_sock, enc, block_size]() {
     double start = cur_time();
     size_t count = 0;
     size_t pkts = 0;
@@ -182,11 +198,25 @@ int main(int argc, const char** argv) {
 
     // Send message out of the send queue
     while(1) {
+
+      // Pull the next packet off the queue
       std::shared_ptr<Message> msg = queue.pop();
-      raw_sock.send(msg->msg, msg->port);
-      count += msg->msg.size();
-      max_packet = std::max(msg->msg.size(), max_packet);
-      ++pkts;
+
+      // FEC encode the packet if requested.
+      if (enc) {
+	enc->encode(msg->msg.data(), msg->msg.size());
+	max_packet = std::max(static_cast<size_t>(msg->msg.size()), max_packet);
+	for (const uint8_t *block : enc->blocks()) {
+	  raw_sock.send(block, block_size, msg->port);
+	  count += block_size;
+	  ++pkts;
+	}
+      } else {
+	raw_sock.send(msg->msg, msg->port);
+	count += msg->msg.size();
+	max_packet = std::max(msg->msg.size(), max_packet);
+	++pkts;
+      }
       double cur = cur_time();
       double dur = cur - start;
       if (dur > 2.0) {
@@ -200,31 +230,6 @@ int main(int argc, const char** argv) {
     }
   };
   std::thread send_thr(send_th);
-
-#if 0
-  // Retrieve messages off the UDP socket.
-  while (1) {
-
-    // Wait until a socket has a packet on it.
-    std::cerr << "max_sock: " << max_sock << std::endl;
-    if (select(max_sock + 1, &sock_fds, (fd_set *)0, (fd_set *)0, 0) >= 0) {
-      std::cerr << "select\n";
-      for (size_t i = 0; i < udp_socks.size(); ++i) {
-	std::cerr << "is set: " << udp_socks[i] << std::endl;
-	if (FD_ISSET(udp_socks[i], &sock_fds)) {
-	  std::cerr << "recv: " << udp_socks[i] << std::endl;
-	  std::shared_ptr<Message> msg(new Message(max_packet, udp_ports[i]));
-	  size_t count = recv(udp_socks[i], msg->msg.data(), max_packet, 0);
-	  std::cerr << "count: " << udp_socks[i] << " " << count << std::endl;
-	  if (count > 0) {
-	    msg->msg.resize(count);
-	    queue.push(msg);
-	  }
-	}
-      }
-    }
-  }
-#endif
 
   // Open the UDP receive sockets.
   std::vector<std::shared_ptr<std::thread> > thrs;
