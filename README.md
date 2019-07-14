@@ -42,7 +42,7 @@ cd ..
 
 for D in SDL2_image-2.0.5 SDL2_ttf-2.0.15 SDL2_gfx-1.0.4; do
   cd ${D}
-  CFLAGS="-O3 -DNDEBUG" ./configure --prefix=/home/webbb/realtime-network-av/build/sdl
+  CFLAGS="-O3 -DNDEBUG" ./configure --disable-mmx --prefix=/home/webbb/realtime-network-av/build/sdl
   make install
   cd ..
 done

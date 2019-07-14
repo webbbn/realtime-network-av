@@ -13,6 +13,8 @@
 #include <arpa/inet.h>
 #include <sys/time.h>
 
+#include <iostream>
+
 #include <raw_socket.hh>
 
 #include <pcap-bpf.h>
@@ -253,24 +255,19 @@ bool RawReceiveSocket::receive(monitor_message_t &msg) {
     break;
   case 0x02: // data
     m_n80211HeaderLength = 0x18;
-    msg.port = *reinterpret_cast<const uint16_t*>(pcap_packet_data + 14);
-    msg.seq_num = *reinterpret_cast<const uint32_t*>(pcap_packet_data + 10);
+    msg.seq_num = *reinterpret_cast<const uint32_t*>(pcap_packet_data + 16);
+    msg.port = *reinterpret_cast<const uint16_t*>(pcap_packet_data + 20);
     break;
   default:
     break;
   }
   pcap_packet_data -= rt_header_len;
 
-  if (pcap_packet_header->len < uint32_t(rt_header_len + m_n80211HeaderLength)) {
+  if (pcap_packet_header->len < static_cast<uint32_t>(rt_header_len + m_n80211HeaderLength)) {
     m_error_msg = "rx ERROR: ppcapheaderlen < u16headerlen + n80211headerlen";
     return false;
   }
 
-  int bytes = pcap_packet_header->len - (rt_header_len + m_n80211HeaderLength);
-  if (bytes < 0) {
-    m_error_msg = "rx ERROR: bytes < 0";
-    return false;
-  }
   struct ieee80211_radiotap_iterator rti;
   if (ieee80211_radiotap_iterator_init(&rti,(struct ieee80211_radiotap_header *)pcap_packet_data,
 				       pcap_packet_header->len) < 0) {

@@ -62,7 +62,6 @@ int main(int argc, const char** argv) {
   po::options_description desc("Allowed options");
   desc.add_options()
     ("help,h", "produce help message")
-    ("debug,D", "print debug messages")
     ("blocks_size,b", po::value<uint16_t>(&block_size)->default_value(1024),
      "the size of the FEC blocks")
     ("nblocks,n", po::value<uint16_t>(&nblocks)->default_value(8),
@@ -95,7 +94,6 @@ int main(int argc, const char** argv) {
     std::cout << desc;
     return EXIT_SUCCESS;
   }
-  bool debug = (vm.count("debug") > 0);
 
   // Open the raw socket
   RawReceiveSocket raw_sock;
@@ -168,10 +166,6 @@ int main(int argc, const char** argv) {
   // Retrieve messages from the raw data socket.
   double prev_time = cur_time();
   FECDecoderStats prev_stats;
-  int8_t rssi_min = 127;
-  int8_t rssi_max = -127;
-  uint32_t rssi_count = 0;
-  float rssi_sum = 0;
   std::map<uint16_t, std::shared_ptr<FECDecoder> > decoders;
   while (!done) {
 
@@ -194,11 +188,12 @@ int main(int argc, const char** argv) {
       if (decoders.find(buf->port) == decoders.end()) {
 	decoders[buf->port] =
 	  std::shared_ptr<FECDecoder>(new FECDecoder(nblocks, nfec_blocks, block_size, true));
+	// Ensure we don't create a bunch of spurious decodes
       }
       std::shared_ptr<FECDecoder> fec = decoders[buf->port];
 
       // Add this block to the FEC decoder.
-      if (fec->add_block(buf->data.data(), buf->seq_num) == FECStatus::FEC_COMPLETE) {
+      if (fec->add_block(buf->data.data()) == FECStatus::FEC_COMPLETE) {
 
 	// Output the data blocks
 	const std::vector<uint8_t*> &blocks = fec->blocks();
@@ -209,8 +204,7 @@ int main(int argc, const char** argv) {
 	    //std::cout.write(reinterpret_cast<const char*>(block + 4), cur_block_size);
 	    s.sin_port = (in_port_t)htons(buf->port);
 	    sendto(sock, block + 4, cur_block_size, 0, (struct sockaddr *)&s,
-	    sizeof(struct sockaddr_in));
-	    usleep(1000);
+		   sizeof(struct sockaddr_in));
 	  }
 	}
       }

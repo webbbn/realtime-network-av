@@ -269,7 +269,7 @@ int main(int argc, char* argv[]) {
 	// Process the received packets
 	while (!done) {
 
-	  size_t recv = srt_recvmsg(their_fd, reinterpret_cast<char*>(buffer), packet_size);
+	  int recv = srt_recvmsg(their_fd, reinterpret_cast<char*>(buffer), packet_size);
 
 	  if (recv != SRT_ERROR) {
 	    done = !dec->decode(buffer, recv);
@@ -391,7 +391,7 @@ int main(int argc, char* argv[]) {
 	if ((block_size > 0) && (nblocks > 0) && (nfec_blocks > 0)) {
 
 	  // Add this block to the FEC decoder.
-	  if (fec.add_block(buf->data.data(), buf->seq_num) == FECStatus::FEC_COMPLETE) {
+	  if (fec.add_block(buf->data.data()) == FECStatus::FEC_COMPLETE) {
 
 	    // Output the data blocks
 	    const std::vector<uint8_t*> &blocks = fec.blocks();

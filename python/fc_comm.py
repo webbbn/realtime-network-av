@@ -9,7 +9,8 @@ import time
 
 # /dev/ttyS0 for Raspberry Pi Zero W
 # /dev/ttyS1 for nanopi duo2
-serial_port = "/dev/ttyS1"
+serial_port = "/dev/ttyS0"
+baudrate = 57600
 
 class SerialToNet(serial.threaded.Protocol):
     """serial->socket"""
@@ -36,12 +37,11 @@ class SerialToNet(serial.threaded.Protocol):
 
 
 if __name__ == '__main__':
-    baudrate = 115200
     broadcast_port = 14550
     receive_port = 14551
 
     # Delay, just in case...
-    time.sleep(20)
+    #time.sleep(20)
 
     # connect to serial port
     ser = serial.serial_for_url(serial_port, do_not_open=True)

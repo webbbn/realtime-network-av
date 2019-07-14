@@ -67,7 +67,7 @@ public:
     return m_block_ptrs;
   }
 
-  FECStatus add_block(const uint8_t *buf, uint32_t seq_num);
+  FECStatus add_block(const uint8_t *buf);
 
   const FECDecoderStats &stats() const {
     return m_stats;

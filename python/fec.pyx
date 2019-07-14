@@ -39,7 +39,7 @@ cdef extern from 'fec.hh':
         uint8_t nblocks()
         uint8_t nfecblocks()
         vector[uint8_t*] blocks()
-        int add_block(const uint8_t * buf, uint32_t seq_num)
+        int add_block(const uint8_t * buf)
 
     cdef cppclass FECEncoder:
         FECEncoder(uint8_t num_blocks, uint8_t num_fec_blocks, uint16_t block_size, uint8_t interlieved)
@@ -60,8 +60,8 @@ cdef class PyFECDecode:
         self.m_dec = FECDecoder(num_blocks, num_fec_blocks, block_size, interlieved)
         self.m_block_size = block_size
 
-    def add_block(self, buf, seq_num):
-        return self.m_dec.add_block(buf, seq_num)
+    def add_block(self, buf):
+        return self.m_dec.add_block(buf)
 
     def get_blocks(self):
         ret = []
