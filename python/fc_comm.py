@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+
+import os
 import sys
 import socket
 import serial
@@ -7,7 +9,7 @@ import time
 
 # /dev/ttyS0 for Raspberry Pi Zero W
 # /dev/ttyS1 for nanopi duo2
-serial_port = "/dev/ttyS0"
+serial_port = "/dev/ttyS1"
 
 class SerialToNet(serial.threaded.Protocol):
     """serial->socket"""
@@ -29,6 +31,7 @@ class SerialToNet(serial.threaded.Protocol):
         return self
 
     def data_received(self, data):
+        print(len(data))
         self.socket.sendto(data, ('<broadcast>', self.port))
 
 

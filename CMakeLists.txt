@@ -17,7 +17,7 @@ else()
 endif()
 
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3 -DNDEBUG")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D_hypot=hypot -O3 -DNDEBUG -DMS_WIN64")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D_hypot=hypot -O3 -DNDEBUG -DMS_WIN64 -DBOOST_LOG_DYN_LINK")
 
 # We have submodule, so we need git to update the submodule
 find_package(Git QUIET)
@@ -82,7 +82,10 @@ include_directories("${PROJECT_SOURCE_DIR}/modules/rtaudio")
 link_directories("${PROJECT_SOURCE_DIR}/modules/rtaudio")
 
 # Find the boost libraries
-find_package(Boost REQUIRED COMPONENTS program_options system filesystem)
+find_package(Boost REQUIRED COMPONENTS
+  program_options
+  system
+  filesystem)
 include_directories(${Boost_INCLUDE_DIR})
 
 # Build the udp_audio server

@@ -27,5 +27,5 @@ endif ()
 
 set(PYFILES fc_comm.py pycamera_tx.py)
 
-install(PROGRAMS fc_comm.py pycamera_tx.py wifi_info.py DESTINATION bin)
-install(FILES format_as_table.py DESTINATION python)
+install(PROGRAMS fc_comm.py pycamera_tx.py wifi_info.py fpvng_controller.py DESTINATION bin)
+install(FILES format_as_table.py network.py camera.py wfb_process.py telemetry.py DESTINATION python)

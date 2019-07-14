@@ -23,47 +23,15 @@
 
 #include <boost/program_options.hpp>
 
+#include <boost/date_time/posix_time/posix_time.hpp>
+
+#include <shared_queue.hh>
 #include <raw_socket.hh>
 #include <fec.hh>
 
 namespace po=boost::program_options;
 
 static const uint32_t max_packet = 65000;
-
-template <typename tmpl__T>
-class Queue {
-public:
-  Queue() = default;
-  ~Queue() = default;
-
-  tmpl__T pop() {
-    std::unique_lock<std::mutex> lock_guard(m_mutex);
-
-    while (m_queue.empty()) {
-      m_cond.wait(lock_guard);
-    }
-
-    auto item = m_queue.front();
-    m_queue.pop();
-    return item;
-  }
-
-  void push(tmpl__T item) {
-    std::unique_lock<std::mutex> lock_guard(m_mutex);
-    m_queue.push(item);
-    lock_guard.unlock();
-    m_cond.notify_one();
-  }
-
-  size_t size() const {
-    return m_queue.size();
-  }
-
-private:
-  std::queue<tmpl__T> m_queue;
-  std::mutex m_mutex;
-  std::condition_variable m_cond;
-};
 
 struct Message {
   Message(size_t max_packet, uint16_t p) : msg(max_packet), port(p) { }
@@ -133,28 +101,30 @@ double cur_time() {
 
 int main(int argc, const char** argv) {
 
+  uint16_t block_size;
+  uint16_t nblocks;
+  uint16_t nfec_blocks;
+  bool csv;
   po::options_description desc("Allowed options");
   desc.add_options()
     ("help,h", "produce help message")
     ("debug,D", "print debug messages")
-    ;
-
-  std::string device;
-  std::vector<std::string> ports;
-  uint16_t block_size;
-  uint16_t nblocks;
-  uint16_t nfec_blocks;
-  po::options_description pos("Positional");
-  pos.add_options()
-    ("device", po::value<std::string>(&device), "the wifi device to use")
-    ("port", po::value<std::vector<std::string> >(&ports),
-     "the input/output UDP port(s) or host:port(s)")
     ("blocks_size,b", po::value<uint16_t>(&block_size)->default_value(1024),
      "the size of the FEC blocks")
     ("nblocks,n", po::value<uint16_t>(&nblocks)->default_value(8),
      "the number of data blockes used in encoding")
     ("nfec_blocks,k", po::value<uint16_t>(&nfec_blocks)->default_value(4),
      "the number of FEC blockes used in encoding")
+    ("csv,c", po::bool_switch(&csv), "output CSV log messages")
+    ;
+
+  std::string device;
+  std::vector<std::string> ports;
+  po::options_description pos("Positional");
+  pos.add_options()
+    ("device", po::value<std::string>(&device), "the wifi device to use")
+    ("port", po::value<std::vector<std::string> >(&ports),
+     "the input/output UDP port(s) or host:port(s)")
     ;
   po::positional_options_description p;
   p.add("device", 1);
@@ -168,7 +138,7 @@ int main(int argc, const char** argv) {
   po::notify(vm);
 
   if (vm.count("help") || !vm.count("port")) {
-    std::cout << "Usage: options_description [options] <send|recv> <device> <[host:]port> ...\n";
+    std::cout << "Usage: options_description [options] <device> <[host:]port> ...\n";
     std::cout << desc;
     return EXIT_SUCCESS;
   }
@@ -189,12 +159,12 @@ int main(int argc, const char** argv) {
   }
 
   // Create a thread to send packets.
-  Queue<std::shared_ptr<Message> > queue;
-  auto send_th = [&queue, &raw_sock, enc, block_size]() {
+  SharedQueue<std::shared_ptr<Message> > queue;
+  auto send_th = [&queue, &raw_sock, enc, block_size, csv]() {
     double start = cur_time();
     size_t count = 0;
     size_t pkts = 0;
-    size_t max_packet = 0;
+    size_t max_pkt = 0;
 
     // Send message out of the send queue
     while(1) {
@@ -205,27 +175,32 @@ int main(int argc, const char** argv) {
       // FEC encode the packet if requested.
       if (enc) {
 	enc->encode(msg->msg.data(), msg->msg.size());
-	max_packet = std::max(static_cast<size_t>(msg->msg.size()), max_packet);
+	max_pkt = std::max(static_cast<size_t>(msg->msg.size()), max_pkt);
 	for (const uint8_t *block : enc->blocks()) {
-	  raw_sock.send(block, block_size, msg->port);
-	  count += block_size;
+	  //raw_sock.send(block, block_size + 4, msg->port);
+	  raw_sock.send(block + 4, block_size, msg->port);
+	  count += block_size + 4;
 	  ++pkts;
 	}
       } else {
 	raw_sock.send(msg->msg, msg->port);
 	count += msg->msg.size();
-	max_packet = std::max(msg->msg.size(), max_packet);
+	max_pkt = std::max(msg->msg.size(), max_pkt);
 	++pkts;
       }
       double cur = cur_time();
       double dur = cur - start;
       if (dur > 2.0) {
-	std::cerr << " Packets/sec: " << int(pkts / dur)
-		  << " Mbps: " << 8e-6 * count / dur
-		  << " Queue size: " << queue.size()
-		  << " Max packet: " << max_packet << std::endl;
+	if (csv) {
+	  std::cout << pkts << "," << count << "," << queue.size() << "," << max_pkt << std::endl;
+	} else {
+	  std::cerr << " Packets/sec: " << int(pkts / dur)
+		    << " Mbps: " << 8e-6 * count / dur
+		    << " Queue size: " << queue.size()
+		    << " Max packet: " << max_pkt << std::endl;
+	}
 	start = cur;
-	count = pkts = max_packet = 0;
+	count = pkts = max_pkt = 0;
       }
     }
   };
