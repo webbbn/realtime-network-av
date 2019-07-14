@@ -62,7 +62,7 @@ RawSendSocket::RawSendSocket(uint32_t send_buffer_size, uint32_t max_packet) :
   m_max_packet(max_packet), m_seq_num(0) {
 
   // Create the send buffer with the appropriate headers.
-  m_hdr_len = sizeof(radiotap_header) + sizeof(ieee_header_data) + sizeof(m_seq_num);
+  m_hdr_len = sizeof(radiotap_header) + sizeof(ieee_header_data);
   m_send_buf.resize(m_hdr_len + max_packet);
   memcpy(m_send_buf.data(), radiotap_header, sizeof(radiotap_header));
   memcpy(m_send_buf.data() + sizeof(radiotap_header), ieee_header_data, sizeof(ieee_header_data));

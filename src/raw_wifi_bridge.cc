@@ -177,8 +177,7 @@ int main(int argc, const char** argv) {
 	enc->encode(msg->msg.data(), msg->msg.size());
 	max_pkt = std::max(static_cast<size_t>(msg->msg.size()), max_pkt);
 	for (const uint8_t *block : enc->blocks()) {
-	  //raw_sock.send(block, block_size + 4, msg->port);
-	  raw_sock.send(block + 4, block_size, msg->port);
+	  raw_sock.send(block, block_size + 4, msg->port);
 	  count += block_size + 4;
 	  ++pkts;
 	}
