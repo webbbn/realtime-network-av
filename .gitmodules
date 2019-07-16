@@ -13,6 +13,3 @@
 [submodule "modules/pyv4l2"]
 	path = modules/pyv4l2
 	url = git@github.com:webbbn/pyv4l2.git
-[submodule "modules/python-radiotap"]
-	path = modules/python-radiotap
-	url = https://github.com/bcopeland/python-radiotap.git

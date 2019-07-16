@@ -51,11 +51,6 @@ if(NOT EXISTS "${PROJECT_SOURCE_DIR}/modules/dcadec/dcadec.c")
   message(FATAL_ERROR "The dcadec submodule was not downloaded! GIT_SUBMODULE was turned off or failed. Please update submodules and try again.")
 endif()
 
-# Ensure the python-radiotap directory was checked out successfully
-if(NOT EXISTS "${PROJECT_SOURCE_DIR}/modules/python-radiotap/radiotap/radiotap.py")
-  message(FATAL_ERROR "The python-radiotap submodule was not downloaded! GIT_SUBMODULE was turned off or failed. Please update submodules and try again.")
-endif()
-
 # Add the local include directory to the include path
 include_directories(${PROJECT_SOURCE_DIR}/include)
 
