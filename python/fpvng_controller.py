@@ -61,6 +61,13 @@ if __name__ == '__main__':
     # Setup an exit handler to gracefully exit
     signal.signal(signal.SIGINT, exit_handler)
 
+    # Try to start the camera
+    cam = camera.CameraProcess()
+    if cam.start():
+        air_side = True
+    else:
+        air_side = False
+
     # Create the network configuration class.
     net = network.Network()
     ifaces = net.monitor_interfaces()
@@ -73,20 +80,25 @@ if __name__ == '__main__':
         exit(1)
     logging.info(mon.dev + " interface configured successfully")
 
-    # Start the WFB interface
-    wfbp_proc = wfb_process.WFBProcess(interface = mon.dev)
-
-    # Start the camera
-    cam = camera.CameraProcess()
+    # Start the WFB interfaces
+    if air_side:
+        wfbp_tx_proc = wfb_process.WFBTxProcess(interface = mon.dev, ports = [ "5600", "144500" ])
+        wfbp_rx_proc = wfb_process.WFBRxProcess(interface = mon.dev, ipaddr = "127.0.0.1")
+    else:
+        wfbp_tx_proc = wfb_process.WFBTxProcess(interface = mon.dev, ports = [ "144501" ])
+        wfbp_rx_proc = wfb_process.WFBRxProcess(interface = mon.dev, ipaddr = "127.0.0.1")
 
     # Create the FC telemetry queue
     fc_telem_queue = queue.Queue()
 
-    # Start the telemetry input parser
-    telemrx = telemetry.SerialTelemetryRx(fc_telem_queue, uart="/dev/ttyS1", baudrate=115200)
-
-    # Start the telemetry output thread
-    telemtx = telemetry.UDPTelemetryTx(fc_telem_queue, "127.0.0.1", 14550)
+    # Start the telemetry parsers / forwarders
+    if air_side:
+        telemrx = telemetry.SerialTelemetryRx(fc_telem_queue, uart="/dev/ttyS1", baudrate=115200)
+        telemtx = telemetry.UDPTelemetryTx(fc_telem_queue, "127.0.0.1", 14550)
+    else:
+        telemrx = telemetry.SerialTelemetryRx(fc_telem_queue, uart="/dev/ttyS0", baudrate=57600)
+        telemtx = telemetry.UDPTelemetryTx(fc_telem_queue, "127.0.0.1", 14551)
 
     # Start the telemetry output
-    wfbp_proc.join()
+    wfbp_tx_proc.join()
+    wfbp_rx_proc.join()

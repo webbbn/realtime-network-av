@@ -387,10 +387,13 @@ class CameraProcess(object):
 
     def __init__(self, device = False, protocol = "UDP", host = "", port = 5600, \
                  width = 1280, height = 720, bitrate = 25000000, quality = 20, inline_headers = True):
+        pass
+
+    def start(self):
+        host_port = host + ":" + str(port)
 
         # Read from the Raspberry Pi camera if it was found and if the user didn't specify an alternate device
         if not device and found_picamera:
-            host_port = str(port)
             logging.info("Using picamera to stream %dx%d/%d video to %s at %f Mbps Using %s protocol " % \
                          (width, height, fps, host_port, bitrate, protocol))
 
@@ -422,22 +425,23 @@ class CameraProcess(object):
                 except Exception as e:
                     continue
             if h264_device == None:
-                logging.critical("No appropriate V4L2 device found")
                 self.camera = None
-                return
+                self.proc = None
+                return False
 
-        logging.debug("Using " + h264_device)
-        #logging.info("Streaming %dx%d video to %s at %f Mbps Using %s protocol from %s" % \
-            #(width, height, host_port, bitrate, protocol, h264_device))
+            logging.info("Streaming %dx%d video to %s at %f Mbps Using %s protocol from %s" % \
+                         (width, height, host_port, bitrate, protocol, h264_device))
 
         self.camera = Camera(protocol, host, port, h264_device)
         self.camera.streaming_params(width, height, bitrate, quality, inline_headers)
-        self.proc = mp.Process(target=self.start)
+        self.proc = mp.Process(target=self.run)
         self.proc.start()
+        return True
 
-    def start(self):
+    def run(self):
         # Start streaming
         self.camera.start_streaming()
 
     def join(self):
-        self.proc.join()
+        if self.proc:
+            self.proc.join()
