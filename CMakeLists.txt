@@ -164,6 +164,10 @@ add_executable(raw_wifi_receiver src/raw_wifi_receiver.cc src/raw_socket.cc src/
 install(TARGETS raw_wifi_receiver DESTINATION bin COMPONENT applications)
 target_link_libraries(raw_wifi_receiver ${Boost_LIBRARIES} pcap pthread)
 
+add_executable(csrf_receiver src/csrf_receiver.cc)
+install(TARGETS csrf_receiver DESTINATION bin COMPONENT applications)
+target_link_libraries(csrf_receiver ${Boost_LIBRARIES} pthread)
+
 # Install the radiotap python directory
 install(FILES
   ${PROJECT_SOURCE_DIR}/modules/python-radiotap/radiotap/__init__.py
