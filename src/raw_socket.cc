@@ -197,7 +197,7 @@ bool RawReceiveSocket::add_device(const std::string &device) {
   // Match the first 4 bytes of the destination address.
   struct bpf_program bpfprogram;
   char filter[128];
-  sprintf(filter, "((ether[10:4] == 0x13223344) && (ether[15] == %d))", m_port);
+  sprintf(filter, "((ether[10:4] == 0x13223344) && (ether[15] & 0x1f == %d))", m_port);
   if (pcap_compile(m_ppcap, &bpfprogram, filter, 1, 0) == -1) {
     m_error_msg = "Error compiling bpf program: " + std::string(filter);
     return false;
@@ -265,7 +265,7 @@ bool RawReceiveSocket::receive(monitor_message_t &msg) {
     m_n80211HeaderLength = 0x18;
     msg.seq_num = *reinterpret_cast<const uint32_t*>(pcap_packet_data + 16);
     msg.port = *reinterpret_cast<const uint16_t*>(pcap_packet_data + 20);
-    msg.link_type = pcap_packet_data[20] >> 5;
+    msg.link_type = pcap_packet_data[15] >> 5;
     break;
   default:
     break;

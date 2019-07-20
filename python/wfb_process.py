@@ -64,7 +64,7 @@ class WFBRxProcess(object):
         except Exception as e:
             print("Error starting subprocess")
             print(e)
-            return Talse
+            return False
         return True
 
     def join(self):
