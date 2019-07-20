@@ -189,6 +189,9 @@ install(FILES "${PROJECT_SOURCE_DIR}/fonts/Cousine-BoldItalic.ttf" DESTINATION f
 install(FILES "${PROJECT_SOURCE_DIR}/fonts/Cousine-Italic.ttf" DESTINATION fonts COMPONENT fonts)
 install(FILES "${PROJECT_SOURCE_DIR}/fonts/Cousine-Regular.ttf" DESTINATION fonts COMPONENT fonts)
 
+# Install the configuration files
+install(FILES "${PROJECT_SOURCE_DIR}/conf/wifi_bridge_ground.json" DESTINATION conf COMPONENT configuratios)
+
 # Create a windows installer
 if (WIN32)
  
@@ -271,7 +274,7 @@ if (WIN32)
   set(CPACK_PACKAGE_INSTALL_DIRECTORY "FPV-NG")
 
   # Define components and their display names
-  set(CPACK_COMPONENTS_ALL applications libraries dlls headers icons fonts)
+  set(CPACK_COMPONENTS_ALL applications libraries dlls headers icons fonts configurations)
   set(CPACK_COMPONENT_APPLICATIONS_DISPLAY_NAME "FPV-NG Applications")
   set(CPACK_COMPONENT_LIBRARIES_DISPLAY_NAME "Libraries")
   set(CPACK_COMPONENT_DLLS_DISPLAY_NAME "DLLs")

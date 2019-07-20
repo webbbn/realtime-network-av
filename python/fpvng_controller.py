@@ -5,11 +5,19 @@ import sys
 
 # Setup some paths based on the directory that this script was run frum.
 root_dir = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
-lib_dir = os.path.join(root_dir, "lib")
 
+# Add the library directory to the LD_LIBRARY_PATH environement variable.
+lib_dir = os.path.join(root_dir, "lib")
+# Add the bin directory to PATH
+bin_dir = os.path.join(root_dir, "bin")
 if 'LD_LIBRARY_PATH' not in os.environ:
     os.environ['LD_LIBRARY_PATH'] = lib_dir
+else:
+    os.environ['LD_LIBRARY_PATH'] += ":" + lib_dir
+os.environ['PATH'] += ":" + bin_dir
+if 'RE_EXECED' not in os.environ:
     try:
+        os.environ['RE_EXECED'] = "1"
         os.execv(sys.argv[0], sys.argv)
     except Exception as exc:
         print('Failed re-exec:', exc)
@@ -18,6 +26,9 @@ if 'LD_LIBRARY_PATH' not in os.environ:
 # Add the python directory to the python path
 python_dir = os.path.join(root_dir, "python")
 sys.path.append(python_dir)
+
+# The default configuration directory.
+conf_dir = os.path.join(root_dir, "conf")
 
 import io
 import time
@@ -30,7 +41,8 @@ import multiprocessing as mp
 import network
 import wfb_process
 import camera
-import telemetry
+import rx_process as rx
+#import telemetry
 
 # Define an exit handler to do a graceful shutdown
 def exit_handler(sig, frame):
@@ -82,22 +94,25 @@ if __name__ == '__main__':
 
     # Start the WFB interfaces
     if air_side:
-        wfbp_tx_proc = wfb_process.WFBTxProcess(interface = mon.dev, ports = [ "5600", "144500" ])
-        wfbp_rx_proc = wfb_process.WFBRxProcess(interface = mon.dev, ipaddr = "127.0.0.1")
+        wfbp_tx_proc = wfb_process.WFBTxProcess(conf_dir + "/wifi_bridge_air.json", interface = mon.dev, port = 25)
+        wfbp_rx_proc = wfb_process.WFBRxProcess(interface = mon.dev, ipaddr = "127.0.0.1", port = 26)
     else:
-        wfbp_tx_proc = wfb_process.WFBTxProcess(interface = mon.dev, ports = [ "144501" ])
-        wfbp_rx_proc = wfb_process.WFBRxProcess(interface = mon.dev, ipaddr = "127.0.0.1")
+        wfbp_tx_proc = wfb_process.WFBTxProcess(conf_dir + "/wifi_bridge_ground.json", interface = mon.dev, port = 26)
+        wfbp_rx_proc = wfb_process.WFBRxProcess(interface = mon.dev, ipaddr = "127.0.0.1", port = 25)
+
+    if not air_side:
+        rx_proc = rx.RxCrossfireProcess(device = "/dev/ttyS0")
 
     # Create the FC telemetry queue
-    fc_telem_queue = queue.Queue()
+    #fc_telem_queue = queue.Queue()
 
     # Start the telemetry parsers / forwarders
-    if air_side:
-        telemrx = telemetry.SerialTelemetryRx(fc_telem_queue, uart="/dev/ttyS1", baudrate=115200)
-        telemtx = telemetry.UDPTelemetryTx(fc_telem_queue, "127.0.0.1", 14550)
-    else:
-        telemrx = telemetry.SerialTelemetryRx(fc_telem_queue, uart="/dev/ttyS0", baudrate=57600)
-        telemtx = telemetry.UDPTelemetryTx(fc_telem_queue, "127.0.0.1", 14551)
+    # if air_side:
+    #     telemrx = telemetry.SerialTelemetryRx(fc_telem_queue, uart="/dev/ttyS1", baudrate=115200)
+    #     telemtx = telemetry.UDPTelemetryTx(fc_telem_queue, "127.0.0.1", 14550)
+    # else:
+    #     telemrx = telemetry.SerialTelemetryRx(fc_telem_queue, uart="/dev/ttyS0", baudrate=57600)
+    #     telemtx = telemetry.UDPTelemetryTx(fc_telem_queue, "127.0.0.1", 14551)
 
     # Start the telemetry output
     wfbp_tx_proc.join()

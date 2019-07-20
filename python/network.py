@@ -16,12 +16,12 @@ class Network(object):
         """Get a list of interfaces that support monitor mode"""
 
         # Get a list of all the interfaces.
+        ret = []
         for iface in pyw.interfaces():
-            ret = []
             # Check if this card support monitor mode
             try:
                 card = pyw.getcard(iface)
-                if 'monitor' in pyw.devmodes(card):
+                if 'monitor' in pyw.devmodes(card) and 'mon0' != card.dev:
                     # Add the card to the list
                     ret.append(iface)
             except pyric.error as e:

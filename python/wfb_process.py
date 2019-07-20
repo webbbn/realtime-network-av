@@ -1,18 +1,17 @@
 
+import os
 import time
 
 import subprocess
 import multiprocessing as mp
 
-
 class WFBTxProcess(object):
 
-    def __init__(self, program = "/home/webbb/realtime-network-av/install/bin/raw_wifi_bridge",
-                 interface = "mon0", ports = [ ], args = []):
+    def __init__(self, conf, program = "raw_wifi_bridge", interface = "mon0", port = 1):
         self.program = program
         self.interface = interface
-        self.ports = ports
-        self.args = args
+        self.conf = conf
+        self.port = port
         self.proc = mp.Process(target=self.start)
         self.proc.start()
 
@@ -26,7 +25,7 @@ class WFBTxProcess(object):
             raise subprocess.CalledProcessError(return_code, cmd)
 
     def start(self):
-        for line in self.execute([self.program] + self.args + [self.interface] + self.ports):
+        for line in self.execute([self.program, self.interface, str(self.port), self.conf]):
             print(line)
 
     def join(self):
@@ -35,11 +34,12 @@ class WFBTxProcess(object):
 class WFBRxProcess(object):
 
     def __init__(self, program = "/home/webbb/realtime-network-av/install/bin/raw_wifi_receiver",
-                 interface = "mon0", ipaddr = "127.0.0.1", args = []):
+                 interface = "mon0", ipaddr = "127.0.0.1", args = [], port = 0):
         self.program = program
         self.interface = interface
         self.ipaddr = ipaddr
         self.args = args
+        self.port = port
         self.proc = mp.Process(target=self.start)
         self.proc.start()
 
@@ -53,7 +53,7 @@ class WFBRxProcess(object):
             raise subprocess.CalledProcessError(return_code, cmd)
 
     def start(self):
-        for line in self.execute([self.program] + self.args + [self.interface] + self.ipaddr):
+        for line in self.execute([self.program] + self.args + [self.interface, str(self.port), self.ipaddr]):
             print(line)
 
     def join(self):

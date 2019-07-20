@@ -59,6 +59,7 @@ int main(int argc, char* argv[]) {
   uint32_t packet_size;
   bool use_udp;
   bool use_srt;
+  uint8_t raw_port;
   uint16_t block_size;
   uint16_t nblocks;
   uint16_t nfec_blocks;
@@ -77,6 +78,7 @@ int main(int argc, char* argv[]) {
     ("device,d", po::value<std::string>(&device), "the wifi device to receive video from")
     ("packet_size", po::value<uint32_t>(&packet_size)->default_value(32767),
      "the size of the packet buffer (the maximum size of a packet)")
+    ("raw_port", po::value<uint8_t>(&raw_port), "the raw socket receivers port number")
     ("blocks_size,b", po::value<uint16_t>(&block_size)->default_value(1024),
      "the size of the FEC blocks")
     ("nblocks,n", po::value<uint16_t>(&nblocks)->default_value(8),
@@ -311,7 +313,7 @@ int main(int argc, char* argv[]) {
       MsgQueue queue;
 
       // Open the raw socket
-      RawReceiveSocket raw_sock;
+      RawReceiveSocket raw_sock(raw_port);
       if (!raw_sock.add_device(device)) {
 	std::cerr << "Error opening the raw socket\n";
 	std::cerr << "  " << raw_sock.error_msg() << std::endl;

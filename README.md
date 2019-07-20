@@ -8,7 +8,10 @@ A collection of utilities for real-time encoding and decoding audio and video st
 
 # Install dependent packages
 
-`sudo apt-get install cmake libasound2-dev libboost-all-dev libavcodec-dev libavformat-dev libswscale-dev libssl-dev cython3 libv4l-dev libpcap-dev libsqlite3-dev`
+~~~
+sudo apt-get install cmake libasound2-dev libboost-all-dev libavcodec-dev libavformat-dev libswscale-dev libssl-dev cython3 libv4l-dev libpcap-dev libsqlite3-dev python3-pip python3-numpy
+sudo pip3 install pyric
+~~~
 
 # Install dependent packages on Raspberry Pi
 

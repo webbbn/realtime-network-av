@@ -55,7 +55,6 @@ double cur_time() {
 
 int main(int argc, const char** argv) {
   namespace po=boost::program_options;
-  std::string hostname;
   uint16_t block_size;
   uint16_t nblocks;
   uint16_t nfec_blocks;
@@ -71,15 +70,18 @@ int main(int argc, const char** argv) {
     ;
 
   std::string device;
+  uint16_t port;
   std::string broadcast_ip;
   po::options_description pos("Positional");
   pos.add_options()
     ("device", po::value<std::string>(&device), "the wifi device to use")
+    ("port", po::value<uint16_t>(&port), "the receivers port number")
     ("broadcast_ip", po::value<std::string>(&broadcast_ip),
      "the IP address of the local broadcast port (XX.XX.XX.255)")
     ;
   po::positional_options_description p;
   p.add("device", 1);
+  p.add("port", 1);
   p.add("broadcast_ip", 1);
 
   po::options_description all_options("Allowed options");
@@ -90,13 +92,13 @@ int main(int argc, const char** argv) {
   po::notify(vm);
 
   if (vm.count("help") || !vm.count("device") || !vm.count("broadcast_ip")) {
-    std::cout << "Usage: options_description [options] <device> <broadcast IP>\n";
+    std::cout << "Usage: options_description [options] <device> <port> <broadcast IP>\n";
     std::cout << desc;
     return EXIT_SUCCESS;
   }
 
   // Open the raw socket
-  RawReceiveSocket raw_sock;
+  RawReceiveSocket raw_sock(port);
   if (!raw_sock.add_device(device)) {
     std::cerr << "Error opening the raw socket\n";
     std::cerr << "  " << raw_sock.error_msg() << std::endl;

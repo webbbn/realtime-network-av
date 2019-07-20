@@ -45,8 +45,8 @@ static uint8_t ieee_header_data[] = {
   0x08, 0x02, 0x00, 0x00, // frame control field (2bytes), duration (2 bytes)
   0x01, 0x00, 0x00, 0x00, 0x00, 0x00, // port = 1st byte of IEEE802.11 RA (mac) must be something
   // odd (wifi hardware determines broadcast/multicast through odd/even check)
-  0x13, 0x22, 0x33, 0x44, 0x55, 0x66, // receiver mac address
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // transmitter mac address (1-4 seq num 5-6 port)
+  0x13, 0x22, 0x33, 0x44, 0x55, 0x66, // receiver mac address (last byte is port)
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // transmitter mac address (1-4 seq num 5-6 udp port)
   0x00, 0x00 // IEEE802.11 seqnum, (will be overwritten later by Atheros firmware/wifi chip)
 };
 
@@ -60,7 +60,7 @@ static uint8_t u8aIeeeHeader_rts[] = {
  * RawSendSocket
  *****************************************************************************/
 
-RawSendSocket::RawSendSocket(uint32_t send_buffer_size, uint32_t max_packet) :
+RawSendSocket::RawSendSocket(uint8_t port, uint32_t send_buffer_size, uint32_t max_packet) :
   m_max_packet(max_packet), m_seq_num(0) {
 
   // Create the send buffer with the appropriate headers.
@@ -68,6 +68,8 @@ RawSendSocket::RawSendSocket(uint32_t send_buffer_size, uint32_t max_packet) :
   m_send_buf.resize(m_hdr_len + max_packet);
   memcpy(m_send_buf.data(), radiotap_header, sizeof(radiotap_header));
   memcpy(m_send_buf.data() + sizeof(radiotap_header), ieee_header_data, sizeof(ieee_header_data));
+  // Set the port in the last byte of the receiver mac address
+  m_send_buf[sizeof(radiotap_header) + 15] = port;
 }
 
 bool RawSendSocket::add_device(const std::string &device) {
@@ -137,10 +139,12 @@ uint8_t *RawSendSocket::send_buffer() {
 bool RawSendSocket::send(size_t msglen, uint16_t port) {
   // Set the sequence number
   ++m_seq_num;
-  uint32_t *seq_num_ptr = reinterpret_cast<uint32_t*>(m_send_buf.data() + sizeof(radiotap_header) + 16);
+  uint32_t *seq_num_ptr = reinterpret_cast<uint32_t*>(m_send_buf.data() +
+						      sizeof(radiotap_header) + 16);
   *seq_num_ptr = m_seq_num;
   // Set the port number
-  uint16_t *port_ptr = reinterpret_cast<uint16_t*>(m_send_buf.data() + sizeof(radiotap_header) + 20);
+  uint16_t *port_ptr = reinterpret_cast<uint16_t*>(m_send_buf.data() +
+						   sizeof(radiotap_header) + 20);
   *port_ptr = port;
   return (::send(m_sock, m_send_buf.data(), msglen + m_hdr_len, 0) >= 0);
 }
@@ -154,7 +158,8 @@ bool RawSendSocket::send(const uint8_t *msg, size_t msglen, uint16_t port) {
  * RawReceiveSocket
  *****************************************************************************/
 
-RawReceiveSocket::RawReceiveSocket(uint32_t max_packet) : m_max_packet(max_packet) {
+RawReceiveSocket::RawReceiveSocket(uint8_t port, uint32_t max_packet) :
+  m_port(port), m_max_packet(max_packet) {
 }
 
 bool RawReceiveSocket::add_device(const std::string &device) {
@@ -189,15 +194,16 @@ bool RawReceiveSocket::add_device(const std::string &device) {
 
   // Match the first 4 bytes of the destination address.
   struct bpf_program bpfprogram;
-  std::string filter("(ether[10:4] == 0x13223344)");
-  if (pcap_compile(m_ppcap, &bpfprogram, filter.c_str(), 1, 0) == -1) {
-    m_error_msg = "Error compiling bpf program: " + filter;
+  char filter[128];
+  sprintf(filter, "((ether[10:4] == 0x13223344) && (ether[15] == %d))", m_port);
+  if (pcap_compile(m_ppcap, &bpfprogram, filter, 1, 0) == -1) {
+    m_error_msg = "Error compiling bpf program: " + std::string(filter);
     return false;
   }
 
   // Configure the filter.
   if (pcap_setfilter(m_ppcap, &bpfprogram) == -1) {
-    m_error_msg = "Error configuring the bpf program: " + filter;
+    m_error_msg = "Error configuring the bpf program: " + std::string(filter);
     return false;
   }
   pcap_freecode(&bpfprogram);

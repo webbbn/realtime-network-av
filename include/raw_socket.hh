@@ -6,6 +6,14 @@
 
 #include <pcap.h>
 
+enum LinkType {
+	       DATA_LINK,
+	       FEC_LINK,
+	       WFB_LINK,
+	       SHORT_DATA_LINK,
+	       RTS_DATA_LINK
+};
+
 struct monitor_message_t {
   monitor_message_t(size_t data_size = 0) :
     data(data_size), seq_num(0), port(0), rssi(0), rate(0), channel(0), channel_flag(0), antenna(0),
@@ -23,7 +31,7 @@ struct monitor_message_t {
 
 class RawSendSocket {
 public:
-  RawSendSocket(uint32_t m_buffer_size = 131072, uint32_t max_packet = 65535);
+  RawSendSocket(uint8_t port, uint32_t m_buffer_size = 131072, uint32_t max_packet = 65535);
 
   bool error() const {
     return (m_sock < 0);
@@ -73,7 +81,7 @@ struct RawReceiveStats {
 
 class RawReceiveSocket {
 public:
-  RawReceiveSocket(uint32_t max_packet = 65535);
+  RawReceiveSocket(uint8_t port, uint32_t max_packet = 65535);
 
   bool add_device(const std::string &device);
 
@@ -88,6 +96,7 @@ public:
   }
 
 private:
+  uint8_t m_port;
   uint32_t m_max_packet;
   pcap_t *m_ppcap;
   int m_selectable_fd;

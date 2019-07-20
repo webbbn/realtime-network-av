@@ -387,21 +387,28 @@ class CameraProcess(object):
 
     def __init__(self, device = False, protocol = "UDP", host = "", port = 5600, \
                  width = 1280, height = 720, bitrate = 25000000, quality = 20, inline_headers = True):
+        self.device = device
+        self.host = host
+        self.port = port
         pass
 
     def start(self):
-        host_port = host + ":" + str(port)
+        if self.host != "":
+            host_port = self.host + ":" + str(self.port)
+        else:
+            host_port = str(self.port)
 
         # Read from the Raspberry Pi camera if it was found and if the user didn't specify an alternate device
-        if not device and found_picamera:
+        if not self.device and found_picamera:
             logging.info("Using picamera to stream %dx%d/%d video to %s at %f Mbps Using %s protocol " % \
                          (width, height, fps, host_port, bitrate, protocol))
 
         else:
+            h264_device = None
 
             # Try finding a v4l2 device that will work
-            if device :
-                devices = [device]
+            if self.device :
+                devices = [self.device]
             else:
                 # Query the list of video devices
                 devices = v4l.get_devices()

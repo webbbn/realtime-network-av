@@ -28,6 +28,22 @@ public:
     return m_block_ptrs;
   }
 
+  uint8_t num_blocks() const {
+    return m_num_blocks;
+  }
+
+  uint8_t num_fec_blocks() const {
+    return m_num_fec_blocks;
+  }
+
+  uint8_t block_size() const {
+    return m_block_size;
+  }
+
+  bool interlieved() const {
+    return m_interlieved;
+  }
+
 private:
   uint8_t m_num_blocks;
   uint8_t m_num_fec_blocks;
