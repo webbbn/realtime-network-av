@@ -42,7 +42,7 @@ import network
 import wfb_process
 import camera
 import rx_process as rx
-#import telemetry
+import telemetry
 
 # Define an exit handler to do a graceful shutdown
 def exit_handler(sig, frame):
@@ -109,13 +109,14 @@ if __name__ == '__main__':
     #fc_telem_queue = queue.Queue()
 
     # Start the telemetry parsers / forwarders
-    # if air_side:
-    #     telemrx = telemetry.SerialTelemetryRx(fc_telem_queue, uart="/dev/ttyS1", baudrate=115200)
+    if air_side:
+        telem = telemetry.SerialTelemetryRx(uart="/dev/ttyS1", baudrate=115200)
     #     telemtx = telemetry.UDPTelemetryTx(fc_telem_queue, "127.0.0.1", 14550)
     # else:
     #     telemrx = telemetry.SerialTelemetryRx(fc_telem_queue, uart="/dev/ttyS0", baudrate=57600)
     #     telemtx = telemetry.UDPTelemetryTx(fc_telem_queue, "127.0.0.1", 14551)
 
-    # Start the telemetry output
+    # Join with the processing threads before shutting down
+    telem.join()
     wfbp_tx_proc.join()
     wfbp_rx_proc.join()
