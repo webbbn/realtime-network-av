@@ -1,0 +1,16 @@
+{
+  "wifi_bridge_ground" : {
+    "ports" : [
+      {
+	"name" : "Video Downlink",
+	"port" : 5600,
+	"type" : "wfb"
+      },
+      {
+	"name" : "Mavlink Downlink",
+	"port" : 14550,
+	"type" : "data"
+      }
+    ]
+  }
+}
