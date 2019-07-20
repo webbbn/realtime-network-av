@@ -77,8 +77,10 @@ if __name__ == '__main__':
     cam = camera.CameraProcess()
     if cam.start():
         air_side = True
+        logging.info("Camera found. Running as Air side.")
     else:
         air_side = False
+        logging.info("Camera NOT found. Running as Ground side.")
 
     # Create the network configuration class.
     net = network.Network()

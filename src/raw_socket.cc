@@ -136,7 +136,7 @@ uint8_t *RawSendSocket::send_buffer() {
   return m_send_buf.data() + m_hdr_len;
 }
 
-bool RawSendSocket::send(size_t msglen, uint16_t port) {
+bool RawSendSocket::send(size_t msglen, uint16_t port, LinkType type) {
   // Set the sequence number
   ++m_seq_num;
   uint32_t *seq_num_ptr = reinterpret_cast<uint32_t*>(m_send_buf.data() +
@@ -149,9 +149,9 @@ bool RawSendSocket::send(size_t msglen, uint16_t port) {
   return (::send(m_sock, m_send_buf.data(), msglen + m_hdr_len, 0) >= 0);
 }
 
-bool RawSendSocket::send(const uint8_t *msg, size_t msglen, uint16_t port) {
+bool RawSendSocket::send(const uint8_t *msg, size_t msglen, uint16_t port, LinkType type) {
   memcpy(send_buffer(), msg, msglen);
-  return send(msglen, port);
+  return send(msglen, port, type);
 }
 
 /******************************************************************************

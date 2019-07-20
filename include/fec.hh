@@ -36,7 +36,7 @@ public:
     return m_num_fec_blocks;
   }
 
-  uint8_t block_size() const {
+  uint16_t block_size() const {
     return m_block_size;
   }
 
@@ -71,12 +71,20 @@ public:
   FECDecoder(uint8_t num_blocks = 8, uint8_t num_fec_blocks = 4, uint16_t block_size = 1024,
 	     bool interlieved = false);
 
-  uint8_t nblocks() const {
+  uint8_t num_blocks() const {
     return m_num_blocks;
   }
 
-  uint8_t nfecblocks() const {
+  uint8_t num_fec_blocks() const {
     return m_num_fec_blocks;
+  }
+
+  uint16_t block_size() const {
+    return m_block_size;
+  }
+
+  bool interlieved() const {
+    return m_interlieved;
   }
 
   std::vector<uint8_t*> &blocks() {

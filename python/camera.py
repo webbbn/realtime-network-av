@@ -388,9 +388,14 @@ class CameraProcess(object):
     def __init__(self, device = False, protocol = "UDP", host = "", port = 5600, \
                  width = 1280, height = 720, bitrate = 25000000, quality = 20, inline_headers = True):
         self.device = device
+        self.protocol = protocol
         self.host = host
         self.port = port
-        pass
+        self.width = width
+        self.height = height
+        self.bitrate = bitrate
+        self.quality = quality
+        self.inline_headers = inline_headers
 
     def start(self):
         if self.host != "":
@@ -401,7 +406,7 @@ class CameraProcess(object):
         # Read from the Raspberry Pi camera if it was found and if the user didn't specify an alternate device
         if not self.device and found_picamera:
             logging.info("Using picamera to stream %dx%d/%d video to %s at %f Mbps Using %s protocol " % \
-                         (width, height, fps, host_port, bitrate, protocol))
+                         (self.width, self.height, fps, host_port, self.bitrate, self.protocol))
 
         else:
             h264_device = None
@@ -425,7 +430,7 @@ class CameraProcess(object):
                     formats = control.get_formats()
                     logging.debug(format_as_table(formats, formats[0].keys(), formats[0].keys(), 'format'))
                     for format in formats:
-                        if format["format"] == "H264" and format["width"] == width and format["height"] == height:
+                        if format["format"] == "H264" and format["width"] == self.width and format["height"] == self.height:
                             logging.debug("Found requested format: %s - %dx%d on %s" % \
                                           (format["format"], format["width"], format["height"], device))
                             h264_device = device
@@ -437,10 +442,10 @@ class CameraProcess(object):
                 return False
 
             logging.info("Streaming %dx%d video to %s at %f Mbps Using %s protocol from %s" % \
-                         (width, height, host_port, bitrate, protocol, h264_device))
+                         (self.width, self.height, host_port, self.bitrate, self.protocol, h264_device))
 
-        self.camera = Camera(protocol, host, port, h264_device)
-        self.camera.streaming_params(width, height, bitrate, quality, inline_headers)
+        self.camera = Camera(self.protocol, self.host, self.port, h264_device)
+        self.camera.streaming_params(self.width, self.height, self.bitrate, self.quality, self.inline_headers)
         self.proc = mp.Process(target=self.run)
         self.proc.start()
         return True

@@ -248,12 +248,12 @@ int main(int argc, const char** argv) {
 	msg->enc->encode(msg->msg.data(), msg->msg.size());
 	max_pkt = std::max(static_cast<size_t>(msg->msg.size()), max_pkt);
 	for (const uint8_t *block : msg->enc->blocks()) {
-	  raw_sock.send(block, msg->enc->block_size() + 4, msg->port);
+	  raw_sock.send(block, msg->enc->block_size() + 4, msg->port, msg->link_type);
 	  count += msg->enc->block_size() + 4;
 	  ++pkts;
 	}
       } else {
-	raw_sock.send(msg->msg, msg->port);
+	raw_sock.send(msg->msg, msg->port, msg->link_type);
 	count += msg->msg.size();
 	max_pkt = std::max(msg->msg.size(), max_pkt);
 	++pkts;

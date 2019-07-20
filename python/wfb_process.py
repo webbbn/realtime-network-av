@@ -25,16 +25,21 @@ class WFBTxProcess(object):
             raise subprocess.CalledProcessError(return_code, cmd)
 
     def start(self):
-        for line in self.execute([self.program, self.interface, str(self.port), self.conf]):
-            print(line)
+        try:
+            for line in self.execute([self.program, self.interface, str(self.port), self.conf]):
+                print(line)
+        except Exception as e:
+            print("Error starting subprocess")
+            print(e)
+            return False
+        return True
 
     def join(self):
         self.proc.join()
 
 class WFBRxProcess(object):
 
-    def __init__(self, program = "/home/webbb/realtime-network-av/install/bin/raw_wifi_receiver",
-                 interface = "mon0", ipaddr = "127.0.0.1", args = [], port = 0):
+    def __init__(self, program = "raw_wifi_receiver", interface = "mon0", ipaddr = "127.0.0.1", args = [], port = 0):
         self.program = program
         self.interface = interface
         self.ipaddr = ipaddr
@@ -53,8 +58,14 @@ class WFBRxProcess(object):
             raise subprocess.CalledProcessError(return_code, cmd)
 
     def start(self):
-        for line in self.execute([self.program] + self.args + [self.interface, str(self.port), self.ipaddr]):
-            print(line)
+        try:
+            for line in self.execute([self.program] + self.args + [self.interface, str(self.port), self.ipaddr]):
+                print(line)
+        except Exception as e:
+            print("Error starting subprocess")
+            print(e)
+            return Talse
+        return True
 
     def join(self):
         self.proc.join()

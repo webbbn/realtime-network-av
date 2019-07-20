@@ -191,6 +191,7 @@ install(FILES "${PROJECT_SOURCE_DIR}/fonts/Cousine-Regular.ttf" DESTINATION font
 
 # Install the configuration files
 install(FILES "${PROJECT_SOURCE_DIR}/conf/wifi_bridge_ground.json" DESTINATION conf COMPONENT configuratios)
+install(FILES "${PROJECT_SOURCE_DIR}/conf/wifi_bridge_air.json" DESTINATION conf COMPONENT configuratios)
 
 # Create a windows installer
 if (WIN32)
