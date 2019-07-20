@@ -147,7 +147,8 @@ bool RawSendSocket::send(size_t msglen, uint16_t port, LinkType type) {
 						   sizeof(radiotap_header) + 20);
   *port_ptr = port;
   // Set the link type
-  m_send_buf[sizeof(radiotap_header) + 15] |= type;
+  m_send_buf[sizeof(radiotap_header) + 15] =
+    ((m_send_buf[sizeof(radiotap_header) + 15] & 0x1f) | (type << 5));
   return (::send(m_sock, m_send_buf.data(), msglen + m_hdr_len, 0) >= 0);
 }
 
