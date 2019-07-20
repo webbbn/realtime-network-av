@@ -45,7 +45,7 @@ static uint8_t ieee_header_data[] = {
   0x08, 0x02, 0x00, 0x00, // frame control field (2bytes), duration (2 bytes)
   0x01, 0x00, 0x00, 0x00, 0x00, 0x00, // port = 1st byte of IEEE802.11 RA (mac) must be something
   // odd (wifi hardware determines broadcast/multicast through odd/even check)
-  0x13, 0x22, 0x33, 0x44, 0x55, 0x66, // receiver mac address (last byte is port)
+  0x13, 0x22, 0x33, 0x44, 0x55, 0x66, // receiver mac address (last byte is port + link type)
   0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // transmitter mac address (1-4 seq num 5-6 udp port)
   0x00, 0x00 // IEEE802.11 seqnum, (will be overwritten later by Atheros firmware/wifi chip)
 };
@@ -69,7 +69,7 @@ RawSendSocket::RawSendSocket(uint8_t port, uint32_t send_buffer_size, uint32_t m
   memcpy(m_send_buf.data(), radiotap_header, sizeof(radiotap_header));
   memcpy(m_send_buf.data() + sizeof(radiotap_header), ieee_header_data, sizeof(ieee_header_data));
   // Set the port in the last byte of the receiver mac address
-  m_send_buf[sizeof(radiotap_header) + 15] = port;
+  m_send_buf[sizeof(radiotap_header) + 15] = port & 0x1f;
 }
 
 bool RawSendSocket::add_device(const std::string &device) {
@@ -142,10 +142,12 @@ bool RawSendSocket::send(size_t msglen, uint16_t port, LinkType type) {
   uint32_t *seq_num_ptr = reinterpret_cast<uint32_t*>(m_send_buf.data() +
 						      sizeof(radiotap_header) + 16);
   *seq_num_ptr = m_seq_num;
-  // Set the port number
+  // Set the udp port number
   uint16_t *port_ptr = reinterpret_cast<uint16_t*>(m_send_buf.data() +
 						   sizeof(radiotap_header) + 20);
   *port_ptr = port;
+  // Set the link type
+  m_send_buf[sizeof(radiotap_header) + 15] |= type;
   return (::send(m_sock, m_send_buf.data(), msglen + m_hdr_len, 0) >= 0);
 }
 
@@ -263,6 +265,7 @@ bool RawReceiveSocket::receive(monitor_message_t &msg) {
     m_n80211HeaderLength = 0x18;
     msg.seq_num = *reinterpret_cast<const uint32_t*>(pcap_packet_data + 16);
     msg.port = *reinterpret_cast<const uint16_t*>(pcap_packet_data + 20);
+    msg.link_type = pcap_packet_data[20] >> 5;
     break;
   default:
     break;

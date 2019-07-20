@@ -16,11 +16,12 @@ enum LinkType {
 
 struct monitor_message_t {
   monitor_message_t(size_t data_size = 0) :
-    data(data_size), seq_num(0), port(0), rssi(0), rate(0), channel(0), channel_flag(0), antenna(0),
-    radiotap_flags(0) {}
+    data(data_size), seq_num(0), port(0), link_type(0), rssi(0), rate(0), channel(0),
+    channel_flag(0), antenna(0), radiotap_flags(0) {}
   std::vector<uint8_t> data;
   uint32_t seq_num;
   uint16_t port;
+  uint8_t link_type;
   int8_t rssi;
   uint8_t rate;
   uint16_t channel;
