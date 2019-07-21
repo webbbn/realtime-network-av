@@ -80,8 +80,15 @@ if (USE_OMX)
 endif (USE_OMX)
 
 # Find the python3 interpreter
-find_package(Python3 COMPONENTS Interpreter)
-
+if (${CMAKE_VERSION} VERSION_LESS "3.12.0")
+  set(Python_ADDITIONAL_VERSIONS "3")
+  set(PYTHON_EXECUTABLE "/usr/bin/python3")
+  find_package(PythonInterp 3.0 REQUIRED)
+  set(PYTHON_INSTALL_DIR "${CMAKE_INSTALL_LIBDIR}/python${PYTHON_VERSION_MAJOR}.${PYTHON_VERSION_MINOR}/site-packages")
+else ()
+  find_package(Python3 COMPONENTS Interpreter)
+  set(PYTHON_INSTALL_DIR "${CMAKE_INSTALL_LIBDIR}/python${Python3_VERSION_MAJOR}.${Python3_VERSION_MINOR}/site-packages")
+endif ()
 # Add rtaudio to the list of directories to build
 add_subdirectory(modules/rtaudio)
 
@@ -190,7 +197,7 @@ install(TARGETS csrf_receiver DESTINATION bin COMPONENT applications)
 target_link_libraries(csrf_receiver ${Boost_LIBRARIES} pthread)
 
 # install the important bits of the pyric submodule
-install(DIRECTORY ${PROJECT_SOURCE_DIR}/modules/pyric/pyric DESTINATION ${CMAKE_INSTALL_LIBDIR}/python3.7/site-packages COMPONENT python)
+install(DIRECTORY ${PROJECT_SOURCE_DIR}/modules/pyric/pyric DESTINATION ${PYTHON_INSTALL_DIR})
 
 # Install the radiotap python directory
 # install(FILES

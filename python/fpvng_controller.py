@@ -24,7 +24,8 @@ if 'RE_EXECED' not in os.environ:
         sys.exit(1)
 
 # Add the python directory to the python path
-python_dir = os.path.join(root_dir, "lib/python3.7/site-packages")
+python_dir = os.path.join(root_dir, "lib/python" + str(sys.version_info.major) + \
+                          "." + str(sys.version_info.minor) + "/site-packages")
 sys.path.append(python_dir)
 
 # The default configuration directory.
