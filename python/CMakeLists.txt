@@ -21,11 +21,11 @@ if (USE_CYTHON)
   cython_add_module(fec fec.pyx ${PROJECT_SOURCE_DIR}/src/fec.c ${PROJECT_SOURCE_DIR}/src/fec.cc)
   target_link_libraries(fec ${PYTHON_LIBRARY})
 
-  install(TARGETS py_srt py_v4l2 fec DESTINATION python)
+  install(TARGETS py_srt py_v4l2 fec DESTINATION ${CMAKE_INSTALL_LIBDIR}/python${Python3_VERSION_MAJOR}.${Python3_VERSION_MINOR}/site-packages)
 
 endif ()
 
 set(PYFILES fc_comm.py pycamera_tx.py)
 
 install(PROGRAMS fc_comm.py pycamera_tx.py wifi_info.py fpvng_controller.py DESTINATION bin)
-install(FILES format_as_table.py network.py camera.py wfb_process.py telemetry.py rx_process.py MultiWii.py DESTINATION python)
+install(FILES format_as_table.py network.py camera.py wfb_process.py telemetry.py rx_process.py MultiWii.py DESTINATION ${CMAKE_INSTALL_LIBDIR}/python${Python3_VERSION_MAJOR}.${Python3_VERSION_MINOR}/site-packages)

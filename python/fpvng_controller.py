@@ -24,7 +24,7 @@ if 'RE_EXECED' not in os.environ:
         sys.exit(1)
 
 # Add the python directory to the python path
-python_dir = os.path.join(root_dir, "python")
+python_dir = os.path.join(root_dir, "lib/python3.7/site-packages")
 sys.path.append(python_dir)
 
 # The default configuration directory.
@@ -117,6 +117,7 @@ if __name__ == '__main__':
     #     telemtx = telemetry.UDPTelemetryTx(fc_telem_queue, "127.0.0.1", 14551)
 
     # Join with the processing threads before shutting down
-    telem.join()
+    if air_side:
+        telem.join()
     wfbp_tx_proc.join()
     wfbp_rx_proc.join()

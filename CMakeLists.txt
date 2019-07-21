@@ -38,17 +38,33 @@ endif()
 
 # Ensure the rtaudio directory was checked out successfully
 if(NOT EXISTS "${PROJECT_SOURCE_DIR}/modules/rtaudio/CMakeLists.txt")
-  message(FATAL_ERROR "The rtaudio submodule was not downloaded! GIT_SUBMODULE was turned off or failed. Please update submodules and try again.")
+  message(FATAL_ERROR "The rtaudio submodule was not downloaded! Please update submodules and try again.")
 endif()
 
 # Ensure the mavlink directory was checked out successfully
-if(NOT EXISTS "${PROJECT_SOURCE_DIR}/modules/mavlink/protocol.h")
-  message(FATAL_ERROR "The mavlink submodule was not downloaded! GIT_SUBMODULE was turned off or failed. Please update submodules and try again.")
+if(NOT EXISTS "${PROJECT_SOURCE_DIR}/modules/mavlink_c/protocol.h")
+  message(FATAL_ERROR "The mavlink_c submodule was not downloaded! Please update submodules and try again.")
+endif()
+if(NOT EXISTS "${PROJECT_SOURCE_DIR}/modules/mavlink/CMakeLists.txt")
+  message(FATAL_ERROR "The mavlink submodule was not downloaded! Please update submodules and try again.")
+endif()
+if(NOT EXISTS "${PROJECT_SOURCE_DIR}/modules/mavlink/pymavlink/setup.py")
+  message(FATAL_ERROR "The mavlink/pymavlink submodule was not downloaded! Please update submodules in the mavlink/pymavlink directory and try again.")
 endif()
 
-# Ensure the mavlink directory was checked out successfully
+# Ensure the dcadec directory was checked out successfully
 if(NOT EXISTS "${PROJECT_SOURCE_DIR}/modules/dcadec/dcadec.c")
-  message(FATAL_ERROR "The dcadec submodule was not downloaded! GIT_SUBMODULE was turned off or failed. Please update submodules and try again.")
+  message(FATAL_ERROR "The dcadec submodule was not downloaded! Please update submodules and try again.")
+endif()
+
+# Ensure the srt directory was checked out successfully
+if(NOT EXISTS "${PROJECT_SOURCE_DIR}/modules/srt/CMakeLists.txt")
+  message(FATAL_ERROR "The srt submodule was not downloaded! Please update submodules and try again.")
+endif()
+
+# Ensure the pyric directory was checked out successfully
+if(NOT EXISTS "${PROJECT_SOURCE_DIR}/modules/pyric/setup.py")
+  message(FATAL_ERROR "The rtaudio submodule was not downloaded! Please update submodules and try again.")
 endif()
 
 # Add the local include directory to the include path
@@ -62,6 +78,9 @@ if (USE_OMX)
   target_link_libraries(rpi-camera-server openmaxil bcm_host vcos pthread)
   install(TARGETS rpi-camera-server DESTINATION bin COMPONENT applications)
 endif (USE_OMX)
+
+# Find the python3 interpreter
+find_package(Python3 COMPONENTS Interpreter)
 
 # Add rtaudio to the list of directories to build
 add_subdirectory(modules/rtaudio)
@@ -102,8 +121,10 @@ find_library(SDL2_TTF_LIBRARY SDL2_ttf)
 find_library(SDL2_IMAGE_LIBRARY SDL2_image)
 find_library(SDL2_GFX_LIBRARY SDL2_gfx)
 
-# Add the mavlink directory to the include path
-include_directories(${PROJECT_SOURCE_DIR}/modules/mavlink/common)
+# Add the mavlink directory to the build
+include_directories(${PROJECT_SOURCE_DIR}/modules/mavlink_c/common)
+set(MAVLINK_SOURCE_DIR ${PROJECT_SOURCE_DIR}/modules/mavlink)
+add_subdirectory(modules/mavlink)
 
 include_directories(${SDL2_INCLUDE_DIRS} ${SRT_SOURCE_DIR}/srtcore ${SRT_SOURCE_DIR}/common ${SRT_BINARY_DIR} ${PROJECT_BINARY_DIR}/sdl/include)
 link_directories(${PROJECT_BINARY_DIR})
@@ -168,12 +189,15 @@ add_executable(csrf_receiver src/csrf_receiver.cc)
 install(TARGETS csrf_receiver DESTINATION bin COMPONENT applications)
 target_link_libraries(csrf_receiver ${Boost_LIBRARIES} pthread)
 
+# install the important bits of the pyric submodule
+install(DIRECTORY ${PROJECT_SOURCE_DIR}/modules/pyric/pyric DESTINATION ${CMAKE_INSTALL_LIBDIR}/python3.7/site-packages COMPONENT python)
+
 # Install the radiotap python directory
-install(FILES
-  ${PROJECT_SOURCE_DIR}/modules/python-radiotap/radiotap/__init__.py
-  ${PROJECT_SOURCE_DIR}/modules/python-radiotap/radiotap/radiotap.py
-  ${PROJECT_SOURCE_DIR}/modules/python-radiotap/radiotap/vht.py
-  DESTINATION python/python-radiotap)
+# install(FILES
+#   ${PROJECT_SOURCE_DIR}/modules/python-radiotap/radiotap/__init__.py
+#   ${PROJECT_SOURCE_DIR}/modules/python-radiotap/radiotap/radiotap.py
+#   ${PROJECT_SOURCE_DIR}/modules/python-radiotap/radiotap/vht.py
+#   DESTINATION python/python-radiotap)
 
 # Install the icons
 install(FILES "${PROJECT_SOURCE_DIR}/icons/attitude-background.png" DESTINATION icons COMPONENT icons)
