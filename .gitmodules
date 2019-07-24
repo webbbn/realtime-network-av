@@ -1,9 +1,6 @@
 [submodule "modules/dcadec"]
 	path = modules/dcadec
 	url = https://github.com/webbbn/dcadec.git
-[submodule "modules/mavlink"]
-	path = modules/mavlink
-	url = https://github.com/webbbn/mavlink.git
 [submodule "modules/rtaudio"]
 	path = modules/rtaudio
 	url = https://github.com/thestk/rtaudio.git
