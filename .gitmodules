@@ -13,6 +13,3 @@
 [submodule "modules/mavlink_c"]
 	path = modules/mavlink_c
 	url = https://github.com/mavlink/c_library_v2.git
-[submodule "modules/pyric"]
-	path = modules/pyric
-	url = https://github.com/wraith-wireless/PyRIC.git
