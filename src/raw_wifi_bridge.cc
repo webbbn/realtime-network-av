@@ -233,8 +233,13 @@ int main(int argc, const char** argv) {
   // Create a thread to send packets.
   auto send_th = [&queue, &raw_sock, csv]() {
     double start = cur_time();
+    double cur = 0;
+    double enc_time = 0;
+    double send_time = 0;
+    double loop_time = 0;
     size_t count = 0;
     size_t pkts = 0;
+    size_t blocks = 0;
     size_t max_pkt = 0;
 
     // Send message out of the send queue
@@ -242,35 +247,47 @@ int main(int argc, const char** argv) {
 
       // Pull the next packet off the queue
       std::shared_ptr<Message> msg = queue.pop();
+      ++pkts;
+      double loop_start = cur_time();
 
       // FEC encode the packet if requested.
       if (msg->enc) {
 	msg->enc->encode(msg->msg.data(), msg->msg.size());
+	enc_time += (cur_time() - loop_start);
 	max_pkt = std::max(static_cast<size_t>(msg->msg.size()), max_pkt);
 	for (const uint8_t *block : msg->enc->blocks()) {
 	  raw_sock.send(block, msg->enc->block_size() + 4, msg->port, msg->link_type);
 	  count += msg->enc->block_size() + 4;
-	  ++pkts;
+	  ++blocks;
 	}
+	send_time += cur_time() - loop_start;
       } else {
+	double send_start = cur_time();
 	raw_sock.send(msg->msg, msg->port, msg->link_type);
+	send_time += (cur_time() - send_start);
 	count += msg->msg.size();
 	max_pkt = std::max(msg->msg.size(), max_pkt);
 	++pkts;
+	++blocks;
       }
       double cur = cur_time();
       double dur = cur - start;
+      loop_time += (cur - loop_start);
       if (dur > 2.0) {
 	if (csv) {
 	  std::cout << pkts << "," << count << "," << queue.size() << "," << max_pkt << std::endl;
 	} else {
-	  std::cerr << " Packets/sec: " << int(pkts / dur)
+	  std::cerr << "Blocks/sec: " << int(blocks / dur)
+		    << " Packets/sec: " << int(pkts / dur)
 		    << " Mbps: " << 8e-6 * count / dur
 		    << " Queue size: " << queue.size()
-		    << " Max packet: " << max_pkt << std::endl;
+		    << " Max packet: " << max_pkt
+		    << " Encode ms: " << 1e+3 * enc_time
+		    << " Send ms: " << 1e+3 * send_time
+		    << " Loop time ms: " << 1e3 * loop_time << std::endl;
 	}
 	start = cur;
-	count = pkts = max_pkt = 0;
+	count = pkts = blocks =  max_pkt = enc_time = send_time = loop_time = 0;
       }
     }
   };

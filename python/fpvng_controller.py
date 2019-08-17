@@ -75,7 +75,7 @@ if __name__ == '__main__':
     signal.signal(signal.SIGINT, exit_handler)
 
     # Try to start the camera
-    cam = camera.CameraProcess()
+    cam = camera.CameraProcess(width = 2560, height = 1280)
     if cam.start():
         air_side = True
         logging.info("Camera found. Running as Air side.")
@@ -110,15 +110,16 @@ if __name__ == '__main__':
     #fc_telem_queue = queue.Queue()
 
     # Start the telemetry parsers / forwarders
-    if air_side:
-        telem = telemetry.SerialTelemetryRx(uart="/dev/ttyS1", baudrate=115200)
+    telem = False
+    #if air_side:
+    #    telem = telemetry.SerialTelemetryRx(uart="/dev/ttyS1", baudrate=115200)
     #     telemtx = telemetry.UDPTelemetryTx(fc_telem_queue, "127.0.0.1", 14550)
     # else:
     #     telemrx = telemetry.SerialTelemetryRx(fc_telem_queue, uart="/dev/ttyS0", baudrate=57600)
     #     telemtx = telemetry.UDPTelemetryTx(fc_telem_queue, "127.0.0.1", 14551)
 
     # Join with the processing threads before shutting down
-    if air_side:
+    if telem:
         telem.join()
     wfbp_tx_proc.join()
     wfbp_rx_proc.join()

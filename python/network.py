@@ -62,7 +62,9 @@ class Network(object):
             pyw.down(card)
             pyw.modeset(card, 'managed')
             pyw.up(card)
+            logging.debug("Setting the bitrate on interface " + interface + " to " + str(bitrate))
             if os.system("iw dev " + card.dev + " set bitrates legacy-2.4 " + str(bitrate)) != 0:
+            #if os.system("iwconfig " + card.dev + " rate 54M fixed") != 0:
                 logging.error("Error setting the bitrate for: " + interface)
                 return None
             pyw.down(card)
