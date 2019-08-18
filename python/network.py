@@ -98,6 +98,7 @@ class Network(object):
 
         # Configure the channel
         try:
+            logging.debug("Changing to channel: " + str(channel))
             pyw.chset(m0, channel, None)
         except pyric.error as e:
             logging.error("Error setting the wifi channel on: " + m0.dev)
