@@ -113,6 +113,7 @@ int main(int argc, const char** argv) {
   uint16_t block_size;
   uint16_t nblocks;
   uint16_t nfec_blocks;
+  uint16_t max_queue_size;
   bool csv;
   po::options_description desc("Allowed options");
   desc.add_options()
@@ -123,6 +124,8 @@ int main(int argc, const char** argv) {
      "the number of data blockes used in encoding")
     ("nfec_blocks,k", po::value<uint16_t>(&nfec_blocks)->default_value(4),
      "the number of FEC blockes used in encoding")
+    ("max_queue_size,q", po::value<uint16_t>(&max_queue_size)->default_value(30),
+     "the number of blocks to allow in the queue before dropping")
     ("csv,c", po::bool_switch(&csv), "output CSV log messages")
     ;
 
@@ -231,7 +234,7 @@ int main(int argc, const char** argv) {
   }
 
   // Create a thread to send packets.
-  auto send_th = [&queue, &raw_sock, csv]() {
+  auto send_th = [&queue, &raw_sock, csv, max_queue_size]() {
     double start = cur_time();
     double cur = 0;
     double enc_time = 0;
@@ -241,12 +244,17 @@ int main(int argc, const char** argv) {
     size_t pkts = 0;
     size_t blocks = 0;
     size_t max_pkt = 0;
+    size_t dropped_blocks = 0;
 
     // Send message out of the send queue
     while(1) {
 
       // Pull the next packet off the queue
       std::shared_ptr<Message> msg = queue.pop();
+      while(queue.size() > max_queue_size) {
+	msg = queue.pop();
+	++dropped_blocks;
+      }
       ++pkts;
       double loop_start = cur_time();
 
@@ -275,19 +283,19 @@ int main(int argc, const char** argv) {
       loop_time += (cur - loop_start);
       if (dur > 2.0) {
 	if (csv) {
-	  std::cout << pkts << "," << count << "," << queue.size() << "," << max_pkt << std::endl;
+	  std::cout << pkts << "," << count << "," << dropped_blocks << "," << max_pkt << std::endl;
 	} else {
 	  std::cerr << "Blocks/sec: " << int(blocks / dur)
 		    << " Packets/sec: " << int(pkts / dur)
 		    << " Mbps: " << 8e-6 * count / dur
-		    << " Queue size: " << queue.size()
+		    << " Dropped: " << dropped_blocks
 		    << " Max packet: " << max_pkt
 		    << " Encode ms: " << 1e+3 * enc_time
 		    << " Send ms: " << 1e+3 * send_time
 		    << " Loop time ms: " << 1e3 * loop_time << std::endl;
 	}
 	start = cur;
-	count = pkts = blocks =  max_pkt = enc_time = send_time = loop_time = 0;
+	count = pkts = blocks =  max_pkt = enc_time = send_time = loop_time = dropped_blocks = 0;
       }
     }
   };

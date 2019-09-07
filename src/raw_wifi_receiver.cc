@@ -205,9 +205,6 @@ int main(int argc, const char** argv) {
 	  uint32_t cur_block_size = *reinterpret_cast<const uint32_t*>(block);
 	  if (cur_block_size > 0) {
 	    //std::cout.write(reinterpret_cast<const char*>(block + 4), cur_block_size);
-	    if (buf->port != 5600) {
-	      std::cerr << "port: " << buf->port << std::endl;
-	    }
 	    s.sin_port = (in_port_t)htons(buf->port);
 	    sendto(sock, block + 4, cur_block_size, 0, (struct sockaddr *)&s,
 		   sizeof(struct sockaddr_in));
