@@ -1,0 +1,13 @@
+[Unit]
+Description=Use udev to configure wifi interfaces in monitor mode
+
+[Service]
+type=simple
+Restart=always
+ExecStart=/usr/local/bin/configure_wifi.py
+ExecReload=/bin/kill -1 $MAINPID
+ExecStop=/bin/kill -9 $MAINPID
+StandardOutput=journal
+
+[Install]
+WantedBy=multi-user.target

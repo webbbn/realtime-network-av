@@ -7,10 +7,11 @@ import multiprocessing as mp
 
 class WFBTxProcess(object):
 
-    def __init__(self, conf, program = "raw_wifi_bridge", interface = "mon0", port = 1):
+    def __init__(self, conf, program = "raw_wifi_bridge", interface = "mon0", args = [], port = 1):
         self.program = program
         self.interface = interface
         self.conf = conf
+        self.args = args
         self.port = port
         self.proc = mp.Process(target=self.start)
         self.proc.start()
@@ -26,7 +27,7 @@ class WFBTxProcess(object):
 
     def start(self):
         try:
-            for line in self.execute([self.program, self.interface, str(self.port), self.conf]):
+            for line in self.execute([self.program] + self.args + [self.interface, str(self.port), self.conf]):
                 print(line)
         except Exception as e:
             print("Error starting subprocess")

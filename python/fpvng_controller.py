@@ -55,12 +55,21 @@ if __name__ == '__main__':
                         help="set output logging level (debug, info, warning, error, critical)")
     parser.add_argument("-b", "--bitrate", default=11, \
                         help="the bitrate to use on the wifi link")
+    parser.add_argument("-vh", "--video_height", default=720, \
+                        help="the desired video frame height")
+    parser.add_argument("-vw", "--video_width", default=1280, \
+                        help="the desired video frame width")
+    parser.add_argument("-c", "--channel", default=1, \
+                        help="the channel to use on the wifi link")
     parser.add_argument("-ohd", "--openhd", help="Maintain compatability with OpenHD", \
                         action='store_true')
 
     # Parse the options
     args = parser.parse_args()
     bitrate = int(args.bitrate)
+    height = int(args.video_height)
+    width = int(args.video_width)
+    channel = int(args.channel)
     openhd_mode = args.openhd
 
     # Configure the logger
@@ -75,7 +84,7 @@ if __name__ == '__main__':
     signal.signal(signal.SIGINT, exit_handler)
 
     # Try to start the camera
-    cam = camera.CameraProcess(width = 2560, height = 1280)
+    cam = camera.CameraProcess(width = width, height = height)
     if cam.start():
         air_side = True
         logging.info("Camera found. Running as Air side.")
@@ -89,19 +98,19 @@ if __name__ == '__main__':
     iface = ifaces[0]
 
     # Configure the first interface
-    mon = net.configure_interface(ifaces[0], bitrate=bitrate)
-    if mon is None:
-        logging.error("Error configuring the network interface: " + iface)
-        exit(1)
-    logging.info(mon.dev + " interface configured successfully")
+    #mon = net.configure_interface(ifaces[0], bitrate=bitrate, channel=channel)
+    #if mon is None:
+        #logging.error("Error configuring the network interface: " + iface)
+        #exit(1)
+    logging.info("Using network interface " + iface)
 
     # Start the WFB interfaces
     if air_side:
-        wfbp_tx_proc = wfb_process.WFBTxProcess(conf_dir + "/wifi_bridge_air.json", interface = mon.dev, port = 25)
-        wfbp_rx_proc = wfb_process.WFBRxProcess(interface = mon.dev, ipaddr = "127.0.0.1", port = 26)
+        wfbp_tx_proc = wfb_process.WFBTxProcess(conf_dir + "/wifi_bridge_air.json", interface = iface, port = 25, args=["-b", "1550", "-k", "3"])
+        wfbp_rx_proc = wfb_process.WFBRxProcess(interface = iface, ipaddr = "127.0.0.1", port = 26)
     else:
-        wfbp_tx_proc = wfb_process.WFBTxProcess(conf_dir + "/wifi_bridge_ground.json", interface = mon.dev, port = 26)
-        wfbp_rx_proc = wfb_process.WFBRxProcess(interface = mon.dev, ipaddr = "192.168.128.255", port = 25)
+        wfbp_tx_proc = wfb_process.WFBTxProcess(conf_dir + "/wifi_bridge_ground.json", interface = iface, port = 26, args=["-b", "1550", "-k", "3"])
+        wfbp_rx_proc = wfb_process.WFBRxProcess(interface = iface, ipaddr = "192.168.128.255", port = 25)
 
     if not air_side:
         rx_proc = rx.RxCrossfireProcess(device = "/dev/ttyS0")

@@ -2,9 +2,16 @@
 import os
 
 import logging
+import subprocess
 
 import pyric
 import pyric.pyw as pyw
+import pyric.utils.hardware as pywhw
+import enum
+
+class Card(enum.Enum):
+    ath9k = 1
+    rtl88xx = 2
 
 class Network(object):
     """Create and control monitor mode wifi interfaces"""
@@ -33,6 +40,18 @@ class Network(object):
     def configure_interface(self, interface, name = 'mon0', channel = 1, txpower = 60, bitrate = 11):
         """Configure the given card in monitor mode"""
 
+        # Determine the type of card for this interface
+        try:
+            driver = pywhw.ifcard(interface)[0]
+            print(driver)
+            if driver == 'rtl88xxau':
+                type = Card.rtl88xx
+            else:
+                type = Card.ath9k
+        except Exception as e:
+            print(e)
+            return None
+
         # Get the card for this interface
         try:
             card = pyw.getcard(interface)
@@ -45,64 +64,46 @@ class Network(object):
             logging.error(interface + " does not support monitor mode")
             return None
 
-        # Delete any previously created interfaces
-        try:
-            for iface in pyw.ifaces(card):
-                if iface[0].dev == name:
-                    logging.info("Deleting interface: " + iface[0].dev)
-                    pyw.devdel(iface[0])
-        except pyric.error as e:
-            logging.error("Error trying to delete existing interfaces")
-            logging.error(e)
-            return None
-
         # Configure the bitrate for this card
         # This is not supported by pyric, so we have to do it manually.
-        try:
-            pyw.down(card)
-            pyw.modeset(card, 'managed')
-            pyw.up(card)
-            logging.debug("Setting the bitrate on interface " + interface + " to " + str(bitrate))
-            if os.system("iw dev " + card.dev + " set bitrates legacy-2.4 " + str(bitrate)) != 0:
-            #if os.system("iwconfig " + card.dev + " rate 54M fixed") != 0:
+        if bitrate != 0 and type == Card.ath9k:
+            try:
+                pyw.down(card)
+                pyw.modeset(card, 'managed')
+                pyw.up(card)
+                logging.debug("Setting the bitrate on interface " + interface + " to " + str(bitrate))
+                if os.system("iw dev " + card.dev + " set bitrates legacy-2.4 " + str(bitrate)) != 0:
+                    #if os.system("iwconfig " + card.dev + " rate 54M fixed") != 0:
+                    logging.error("Error setting the bitrate for: " + interface)
+                    return None
+                pyw.down(card)
+            except pyric.error as e:
                 logging.error("Error setting the bitrate for: " + interface)
+                logging.error(e)
                 return None
-            pyw.down(card)
-        except pyric.error as e:
-            logging.error("Error setting the bitrate for: " + interface)
-            logging.error(e)
-            return None
-
-        # Create a virtual monitor mode interface
-        try:
-            m0 = pyw.devadd(card, name, 'monitor')
-        except pyric.error as e:
-            logging.error("Error creating the monitor mode interface for: " + interface)
-            logging.error(e)
-            return None
-        logging.info("Created network interface: " + name)
 
         # Try to configure the transmit power level (some cards don't support this)
         try:
-            pyw.txset(m0, txpower, 'fixed')
+            pyw.txset(card, txpower, 'fixed')
         except pyric.error as e:
             pass
 
         # Bring the interface up
         try:
-            pyw.up(m0)
+            pyw.up(card)
         except pyric.error as e:
-            logging.error("Error bringing up the interface: " + m0.dev)
+            logging.error("Error bringing up the interface: " + card.dev)
             logging.error(e)
             return False
 
         # Configure the channel
         try:
             logging.debug("Changing to channel: " + str(channel))
-            pyw.chset(m0, channel, None)
+            pyw.chset(card, channel, None)
+
         except pyric.error as e:
-            logging.error("Error setting the wifi channel on: " + m0.dev)
+            logging.error("Error setting the wifi channel on: " + card.dev)
             logging.error(e)
             return False
 
-        return m0
+        return card
