@@ -183,6 +183,9 @@ add_executable(csrf_receiver src/csrf_receiver.cc)
 install(TARGETS csrf_receiver DESTINATION bin COMPONENT applications)
 target_link_libraries(csrf_receiver ${Boost_LIBRARIES} pthread)
 
+# Add the wifibroadcast directory to the build
+add_subdirectory(${PROJECT_SOURCE_DIR}/wifibroadcast)
+
 # Install the icons
 install(FILES "${PROJECT_SOURCE_DIR}/icons/attitude-background.png" DESTINATION icons COMPONENT icons)
 install(FILES "${PROJECT_SOURCE_DIR}/icons/attitude-foreground.png" DESTINATION icons COMPONENT icons)
