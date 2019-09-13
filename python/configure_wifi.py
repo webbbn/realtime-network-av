@@ -76,7 +76,7 @@ class Network(object):
             card = pyw.getcard(device_name)
             if 'monitor' in pyw.devmodes(card):
                 return device_name
-            return true
+            return True
 
         except pyric.error as e:
             return False
@@ -108,15 +108,21 @@ class Network(object):
         # Determine the type of card for this interface
         try:
             driver = pywhw.ifcard(interface)[0]
+            logging.debug("Found wifi card with driver: %s", (driver))
             if driver == 'rtl88xxau':
                 type = Card.rtl88xx
-            else:
+            elif driver == 'ath9k_htc':
                 type = Card.ath9k
+            else:
+                logging.debug("Unknown type type: %s", driver)
+                return None
+
         except Exception as e:
             print(e)
             return None
 
         # Retrieve the configuration file
+        logging.debug("Configuring: %s of type %s" % (interface, type.name))
         channel = self.m_config[type.name].getint('channel', 0)
         if channel == 0:
             channel = self.m_config['DEFAULT'].getint('channel', 0)
