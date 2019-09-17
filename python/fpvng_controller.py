@@ -106,10 +106,10 @@ if __name__ == '__main__':
 
     # Start the WFB interfaces
     if air_side:
-        wfbp_tx_proc = wfb_process.WFBTxProcess(conf_dir + "/wifi_bridge_air.json", interface = iface, port = 25, args=["-b", "1550", "-k", "3"])
+        wfbp_tx_proc = wfb_process.WFBTxProcess(conf_dir + "/wifi_bridge_air.json", interface = iface, port = 25)
         wfbp_rx_proc = wfb_process.WFBRxProcess(interface = iface, ipaddr = "127.0.0.1", port = 26)
     else:
-        wfbp_tx_proc = wfb_process.WFBTxProcess(conf_dir + "/wifi_bridge_ground.json", interface = iface, port = 26, args=["-b", "1550", "-k", "3"])
+        wfbp_tx_proc = wfb_process.WFBTxProcess(conf_dir + "/wifi_bridge_ground.json", interface = iface, port = 26)
         wfbp_rx_proc = wfb_process.WFBRxProcess(interface = iface, ipaddr = "192.168.128.255", port = 25)
 
     if not air_side:

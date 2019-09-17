@@ -145,7 +145,7 @@ class Network(object):
         if bitrate != 0 and type == Card.ath9k:
             try:
                 pyw.down(card)
-                pyw.modeset(card, 'managed')
+                pyw.modeset(card, 'managed', flags='other bss')
                 pyw.up(card)
                 logging.debug("Setting the bitrate on interface " + interface + " to " + str(bitrate))
                 if os.system("iw dev " + card.dev + " set bitrates legacy-2.4 " + str(bitrate)) != 0:
