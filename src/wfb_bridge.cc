@@ -1,0 +1,531 @@
+
+#include <stdlib.h>
+#include <stdio.h>
+#include <stdint.h>
+#include <unistd.h>
+#include <sys/socket.h>
+#include <netinet/ether.h>
+#include <netpacket/packet.h>
+#include <net/if.h>
+#include <netdb.h>
+#include <arpa/inet.h>
+#include <sys/time.h>
+#include <time.h>
+
+#include <iostream>
+#include <string>
+#include <vector>
+#include <mutex>
+#include <condition_variable>
+#include <queue>
+#include <memory>
+#include <thread>
+
+#include <boost/program_options.hpp>
+
+#include <boost/foreach.hpp>
+
+#include <boost/property_tree/ptree.hpp>
+#include <boost/property_tree/ini_parser.hpp>
+
+#include <boost/date_time/posix_time/posix_time.hpp>
+
+#include <stats_accumulator.hh>
+#include <shared_queue.hh>
+#include <raw_socket.hh>
+#include <fec.hh>
+
+namespace po=boost::program_options;
+namespace pt=boost::property_tree;
+
+static const uint32_t max_packet = 65000;
+
+std::string hostname_to_ip(const std::string &hostname);
+
+struct Message {
+  Message(size_t max_packet, uint8_t p, LinkType lt, uint8_t priority,
+	  std::shared_ptr<FECEncoder> e) : msg(max_packet), port(p), link_type(lt), enc(e) { }
+  std::vector<uint8_t> msg;
+  uint8_t port;
+  uint8_t priority;
+  LinkType link_type;
+  std::shared_ptr<FECEncoder> enc;
+};
+
+struct UDPDestination {
+  UDPDestination(uint16_t port, const std::string &hostname, std::shared_ptr<FECDecoder> enc) :
+    fec(enc) {
+
+    // Initialize the UDP output socket.
+    memset(&s, '\0', sizeof(struct sockaddr_in));
+    s.sin_family = AF_INET;
+    s.sin_port = (in_port_t)htons(port);
+
+    // Lookup the IP address from the hostname
+    std::string ip;
+    if (hostname != "") {
+      ip = hostname_to_ip(hostname);
+      s.sin_addr.s_addr = inet_addr(ip.c_str());
+    } else {
+      s.sin_addr.s_addr = INADDR_ANY;
+    }
+    s.sin_addr.s_addr = inet_addr(ip.c_str());
+  }
+  struct sockaddr_in s;
+  std::shared_ptr<FECDecoder> fec;
+};
+
+
+std::string hostname_to_ip(const std::string &hostname) {
+
+  // Try to lookup the host.
+  struct hostent *he;
+  if ((he = gethostbyname(hostname.c_str())) == NULL) {
+    std::cerr << "Error: invalid hostname\n";
+    return "";
+  }
+
+  struct in_addr **addr_list = (struct in_addr **)he->h_addr_list;
+  for(int i = 0; addr_list[i] != NULL; i++) {
+    //Return the first one;
+    return inet_ntoa(*addr_list[i]);
+  }
+
+  return "";
+}
+
+int open_udp_socket_for_rx(uint16_t port, const std::string hostname = "") {
+
+  // Try to open a UDP socket.
+  int fd = socket(AF_INET, SOCK_DGRAM, 0);
+  if (fd < 0) {
+    std::cerr << "Error opening the UDP receive socket.\n";
+    return -1;
+  }
+
+  // Set the socket options.
+  int optval = 1;
+  setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (const void *)&optval , sizeof(int));
+
+  // Find to the receive port
+  struct sockaddr_in saddr;
+  bzero((char *)&saddr, sizeof(saddr));
+  saddr.sin_family = AF_INET;
+  saddr.sin_port = htons(port);
+
+  // Lookup the IP address from the hostname
+  std::string ip;
+  if (hostname != "") {
+    ip = hostname_to_ip(hostname);
+    saddr.sin_addr.s_addr = inet_addr(ip.c_str());
+  } else {
+    saddr.sin_addr.s_addr = INADDR_ANY;
+  }
+
+  if (bind(fd, (struct sockaddr *)&saddr, sizeof(saddr)) < 0) {
+    std::cerr << "Error binding to the UDP receive socket: " << port << std::endl;
+    return -1;
+  }
+
+  return fd;
+}
+
+double cur_time() {
+  struct timeval t;
+  gettimeofday(&t, NULL);
+  return double(t.tv_sec) + double(t.tv_usec) * 1e-6;
+}
+
+int main(int argc, const char** argv) {
+
+  uint16_t max_queue_size;
+  bool csv;
+  po::options_description desc("Allowed options");
+  desc.add_options()
+    ("help,h", "produce help message")
+    ("max_queue_size,q", po::value<uint16_t>(&max_queue_size)->default_value(30),
+     "the number of blocks to allow in the queue before dropping")
+    ("csv,c", po::bool_switch(&csv), "output CSV log messages")
+    ;
+
+  std::string device;
+  std::string mode;
+  std::string conf_file;
+  po::options_description pos("Positional");
+  pos.add_options()
+    ("device", po::value<std::string>(&device), "the wifi device to use")
+    ("mode", po::value<std::string>(&mode),
+     "the mode as specified in the configuration file (air/ground)")
+    ("conf_file", po::value<std::string>(&conf_file),
+     "the path to the configuration file used for configuring ports")
+    ;
+  po::positional_options_description p;
+  p.add("device", 1);
+  p.add("mode", 1);
+  p.add("conf_file", 1);
+
+  po::options_description all_options("Allowed options");
+  all_options.add(desc).add(pos);
+  po::variables_map vm;
+  po::store(po::command_line_parser(argc, argv).
+	    options(all_options).positional(p).run(), vm);
+  po::notify(vm);
+
+  if (vm.count("help") || !vm.count("conf_file")) {
+    std::cout << "Usage: options_description [options] <device> <mode> <configuration file>\n";
+    std::cout << desc;
+    return EXIT_SUCCESS;
+  }
+
+  // Parse the configuration file.
+  pt::ptree conf;
+  try {
+    pt::read_ini(conf_file, conf);
+  } catch(...) {
+    std::cerr << "Error reading the configuration file: " << conf_file << std::endl;
+    return EXIT_FAILURE;
+  }
+
+  // Create the message queues.
+  SharedQueue<std::shared_ptr<monitor_message_t> > inqueue;   // Wifi to UDP
+  SharedQueue<std::shared_ptr<Message> > outqueue;  // UDP to Wifi
+
+  // Create the uplink UDP interfaces as specified in the configuration file.
+  std::vector<std::shared_ptr<std::thread> > thrs;
+  BOOST_FOREACH(const auto &v, conf) {
+
+    // Only process uplink configuration entries.
+    std::string direction = v.second.get<std::string>("direction", "");
+    if (((direction == "down") && (mode == "air")) ||
+	((direction == "up") && (mode == "ground"))) {
+
+      // Get the name.
+      std::string name = v.second.get<std::string>("name", "");
+
+      // Get the UDP port number (required).
+      uint16_t inport = v.second.get<uint16_t>("inport", 0);
+      if (inport == 0) {
+	std::cerr << "No inport specified for " << name << std::endl;
+	return EXIT_FAILURE;
+      }
+
+      // Get the remote hostname/ip (optional)
+      std::string hostname = v.second.get<std::string>("inhost", "127.0.0.1");
+
+      // Get the port number (required).
+      uint8_t port = v.second.get<uint16_t>("port", 0);
+      if (port == 0) {
+	std::cerr << "No port specified for " << name << std::endl;
+	return EXIT_FAILURE;
+      }
+
+      // Get the link type
+      std::string type = v.second.get<std::string>("type", "data");
+
+      // Get the priority (optional).
+      uint8_t priority = v.second.get<uint8_t>("priority", 100);
+
+      // Get the FEC stats (optional).
+      uint16_t blocksize = v.second.get<uint16_t>("blocksize", 1024);
+      uint8_t nblocks = v.second.get<uint8_t>("blocks", 0);
+      uint8_t nfec_blocks = v.second.get<uint8_t>("fec", 0);
+
+      // Create the FEC encoder if requested.
+      std::shared_ptr<FECEncoder> enc;
+      LinkType link_type = DATA_LINK;
+      if ((type == "data") && (nblocks > 0) && (nfec_blocks > 0) && (blocksize > 0)) {
+	enc.reset(new FECEncoder(nblocks, nfec_blocks, blocksize, false));
+	link_type = DATA_LINK;
+      } else if (type == "short") {
+	link_type = SHORT_DATA_LINK;
+      } else if (type == "rts") {
+	link_type = RTS_DATA_LINK;
+      }
+
+      // Try to open the UDP socket.
+      int udp_sock = open_udp_socket_for_rx(inport, hostname);
+      if (udp_sock < 0) {
+	std::cerr << "Error opening the UDP socket for " << name << "  ("
+		  << hostname << ":" << port << std::endl;
+	return EXIT_FAILURE;
+      }
+
+      // Create the receive thread for this socket
+      auto uth = [udp_sock, port, enc, link_type, priority, &outqueue]() {
+		   while (1) {
+		     std::shared_ptr<Message> msg(new Message(max_packet, port, link_type,
+							      priority, enc));
+		     size_t count = recv(udp_sock, msg->msg.data(), max_packet, 0);
+		     if (count > 0) {
+		       msg->msg.resize(count);
+		       outqueue.push(msg);
+		     }
+		   }
+		 };
+      thrs.push_back(std::shared_ptr<std::thread>(new std::thread(uth)));
+    }    
+  }
+
+  // Open the raw transmit socket
+  RawSendSocket raw_send_sock((mode == "ground"));
+  if (!raw_send_sock.add_device(device)) {
+    std::cerr << "Error opeing the raw socket for transmiting.\n";
+    std::cerr << "  " << raw_send_sock.error_msg() << std::endl;
+    return EXIT_FAILURE;
+  }
+
+  // Create a thread to send raw socket packets.
+  auto send_th = [&outqueue, &raw_send_sock, csv, max_queue_size]() {
+    double start = cur_time();
+    double cur = 0;
+    double enc_time = 0;
+    double send_time = 0;
+    double loop_time = 0;
+    size_t count = 0;
+    size_t pkts = 0;
+    size_t blocks = 0;
+    size_t max_pkt = 0;
+    size_t dropped_blocks = 0;
+
+    // Send message out of the send queue
+    while(1) {
+
+      // Pull the next packet off the queue
+      std::shared_ptr<Message> msg = outqueue.pop();
+      while(outqueue.size() > max_queue_size) {
+	msg = outqueue.pop();
+	++dropped_blocks;
+      }
+      ++pkts;
+      double loop_start = cur_time();
+
+      // FEC encode the packet if requested.
+      if (msg->enc) {
+	msg->enc->encode(msg->msg.data(), msg->msg.size());
+	enc_time += (cur_time() - loop_start);
+	max_pkt = std::max(static_cast<size_t>(msg->msg.size()), max_pkt);
+	for (const uint8_t *block : msg->enc->blocks()) {
+	  raw_send_sock.send(block, msg->enc->block_size() + 4, msg->port, msg->link_type);
+	  count += msg->enc->block_size() + 4;
+	  ++blocks;
+	}
+	send_time += cur_time() - loop_start;
+      } else {
+	double send_start = cur_time();
+	raw_send_sock.send(msg->msg, msg->port, msg->link_type);
+	send_time += (cur_time() - send_start);
+	count += msg->msg.size();
+	max_pkt = std::max(msg->msg.size(), max_pkt);
+	++pkts;
+	++blocks;
+      }
+      double cur = cur_time();
+      double dur = cur - start;
+      loop_time += (cur - loop_start);
+      if (dur > 2.0) {
+	if (csv) {
+	  std::cout << pkts << "," << count << "," << dropped_blocks << "," << max_pkt << std::endl;
+	} else {
+	  std::cerr << "Blocks/sec: " << int(blocks / dur)
+		    << " Packets/sec: " << int(pkts / dur)
+		    << " Mbps: " << 8e-6 * count / dur
+		    << " Dropped: " << dropped_blocks
+		    << " Max packet: " << max_pkt
+		    << " Encode ms: " << 1e+3 * enc_time
+		    << " Send ms: " << 1e+3 * send_time
+		    << " Loop time ms: " << 1e3 * loop_time << std::endl;
+	}
+	start = cur;
+	count = pkts = blocks =  max_pkt = enc_time = send_time = loop_time = dropped_blocks = 0;
+      }
+    }
+  };
+  std::thread send_thr(send_th);
+
+  // Open the raw receive socket
+  RawReceiveSocket raw_recv_sock((mode == "ground"));
+  if (!raw_recv_sock.add_device(device)) {
+    std::cerr << "Error opeing the raw socket for transmiting.\n";
+    std::cerr << "  " << raw_recv_sock.error_msg() << std::endl;
+    return EXIT_FAILURE;
+  }
+
+  // Create the raw socket receive thread
+  bool done = false;
+  auto recv = [&raw_recv_sock, &inqueue, &done]() {
+    double prev_time = cur_time();
+    StatsAccumulator<int8_t> rssi_stats;
+    RawReceiveStats prev_stats;
+    while(!done) {
+      std::shared_ptr<monitor_message_t> msg(new monitor_message_t);
+      if (raw_recv_sock.receive(*msg)) {
+	inqueue.push(msg);
+	rssi_stats.add(msg->rssi);
+
+	double dur = (cur_time() - prev_time);
+	if (dur > 2.0) {
+	  prev_time = cur_time();
+	  const RawReceiveStats &stats = raw_recv_sock.stats();
+	  if (prev_stats.packets == 0) {
+	    prev_stats = stats;
+	  }
+	  std::cerr
+	    << "Packets: " << stats.packets - prev_stats.packets << " (D:"
+	    << stats.dropped_packets - prev_stats.dropped_packets << " E:"
+	    << stats.error_packets - prev_stats.error_packets
+	    << ")  MB: " << static_cast<float>(stats.bytes) * 1e-6
+	    << " (" << static_cast<float>(stats.bytes - prev_stats.bytes) * 1e-6
+	    << " - " << 8e-6 * static_cast<double>(stats.bytes - prev_stats.bytes) / dur
+	    << " Mbps)  Resets: " << stats.resets << "-" << stats.resets - prev_stats.resets
+	    << "  RSSI: " << static_cast<int16_t>(rint(rssi_stats.mean())) << " ("
+	    << static_cast<int16_t>(rssi_stats.min()) << "/"
+	    << static_cast<int16_t>(rssi_stats.max()) << ")\n";
+	  prev_stats = stats;
+	  rssi_stats.reset();
+	}
+      } else {
+	std::cerr << "Error receiving packet.\n" << raw_recv_sock.error_msg() << std::endl;
+      }
+    }
+  };
+  std::thread recv_thread(recv);
+
+  // Open the UDP send socket
+  int send_sock = socket(AF_INET, SOCK_DGRAM, 0);
+  if (send_sock < 0) {
+    std::cerr << "Error opening the UDP send socket.\n";
+    return EXIT_FAILURE;
+  }
+  int trueflag = 1;
+  if (setsockopt(send_sock, SOL_SOCKET, SO_BROADCAST, &trueflag, sizeof(trueflag)) < 0) {
+    std::cerr << "Error setting the UDP send socket to broadcast.\n";
+    return EXIT_FAILURE;
+  }
+
+  // Create the downlink UDP interfaces as specified in the configuration file.
+  std::vector<std::shared_ptr<UDPDestination> > udp_out(16);
+  BOOST_FOREACH(const auto &v, conf) {
+
+    // Only process uplink configuration entries.
+    std::string direction = v.second.get<std::string>("direction", "");
+    if (((direction == "up") && (mode == "air")) ||
+	((direction == "down") && (mode == "ground"))) {
+
+      // Get the name.
+      std::string name = v.second.get<std::string>("name", "");
+
+      // Get the UDP port number (required).
+      uint16_t outport = v.second.get<uint16_t>("outport", 0);
+      if (outport == 0) {
+	std::cerr << "No outport specified for " << name << std::endl;
+	return EXIT_FAILURE;
+      }
+
+      // Get the remote hostname/ip (optional)
+      std::string hostname = v.second.get<std::string>("outhost", "127.0.0.1");
+
+      // Get the port number (required).
+      uint8_t port = v.second.get<uint16_t>("port", 0);
+      if (port == 0) {
+	std::cerr << "No port specified for " << name << std::endl;
+	return EXIT_FAILURE;
+      }
+      if (port > 15) {
+	std::cerr << "Invalid port specified for " << name << "  (" << port << ")" << std::endl;
+	return EXIT_FAILURE;
+      }
+
+      // Get the link type
+      std::string type = v.second.get<std::string>("type", "data");
+
+      // Get the FEC stats (optional).
+      uint16_t blocksize = v.second.get<uint16_t>("blocksize", 1024);
+      uint8_t nblocks = v.second.get<uint8_t>("blocks", 0);
+      uint8_t nfec_blocks = v.second.get<uint8_t>("fec", 0);
+
+      // Create the FEC encoder if requested.
+      std::shared_ptr<FECDecoder> enc;
+      LinkType link_type = DATA_LINK;
+      if ((type == "data") && (nblocks > 0) && (nfec_blocks > 0) && (blocksize > 0)) {
+	std::cerr << "enc on port " << port << std::endl;
+	enc.reset(new FECDecoder(nblocks, nfec_blocks, blocksize, false));
+	link_type = DATA_LINK;
+      } else if (type == "short") {
+	link_type = SHORT_DATA_LINK;
+      } else if (type == "rts") {
+	link_type = RTS_DATA_LINK;
+      }
+
+      udp_out[port].reset(new UDPDestination(outport, hostname, enc));
+    }
+  }
+
+  // Retrieve messages from the raw data socket.
+  double prev_time = cur_time();
+  FECDecoderStats prev_stats;
+  while (!done) {
+
+    // Ralink and Atheros both always supply the FCS to userspace, no need to check
+    //if (prd.m_nRadiotapFlags & IEEE80211_RADIOTAP_F_FCS)
+    //bytes -= 4;
+
+    //rx_status->adapter[adapter_no].received_packet_cnt++;
+    //	rx_status->adapter[adapter_no].last_update = dbm_ts_now[adapter_no];
+    //	fprintf(stderr,"lu[%d]: %lld\n",adapter_no,rx_status->adapter[adapter_no].last_update);
+    //	rx_status->adapter[adapter_no].last_update = current_timestamp();
+
+    // Pull the next block off the message queue.
+    std::shared_ptr<monitor_message_t> buf = inqueue.pop();
+
+    // Lookup the destination class.
+    if (!udp_out[buf->port]) {
+      std::cerr << "Error finding the output destination for port " << buf->port << std::endl;
+      continue;
+    }
+
+    // Is the packet FEC encoded?
+    if (udp_out[buf->port]->fec) {
+      std::shared_ptr<FECDecoder> fec = udp_out[buf->port]->fec;
+
+      // Add this block to the FEC decoder.
+      if (fec->add_block(buf->data.data()) == FECStatus::FEC_COMPLETE) {
+
+	// Output the data blocks
+	const std::vector<uint8_t*> &blocks = fec->blocks();
+	for (size_t b = 0; b < fec->num_blocks(); ++b) {
+	  const uint8_t *block = blocks[b];
+	  uint32_t cur_block_size = *reinterpret_cast<const uint32_t*>(block);
+	  if (cur_block_size > 0) {
+	    sendto(send_sock, block + 4, cur_block_size, 0,
+		   (struct sockaddr *)&(udp_out[buf->port]->s), sizeof(struct sockaddr_in));
+	  }
+	}
+      }
+
+      double dur = (cur_time() - prev_time);
+      if (dur > 2.0) {
+	// Combine all decoder stats.
+	const FECDecoderStats &stats = fec->stats();
+	std::cerr
+	  << "Decode stats: "
+	  << stats.total_packets - prev_stats.total_packets << " / "
+	  << stats.dropped_packets - prev_stats.dropped_packets << std::endl;
+	prev_time = cur_time();
+	prev_stats = stats;
+      }
+
+    } else {
+
+      // Just relay the packet if we're not FEC decoding.
+      sendto(send_sock, buf->data.data(), buf->data.size(), 0,
+	     (struct sockaddr *)&(udp_out[buf->port]->s), sizeof(struct sockaddr_in));
+    }
+  }
+
+  for(auto th : thrs) {
+    th->join();
+  }
+  send_thr.join();
+
+  return EXIT_SUCCESS;
+}

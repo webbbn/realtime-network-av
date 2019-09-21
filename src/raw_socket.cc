@@ -60,16 +60,14 @@ static uint8_t u8aIeeeHeader_rts[] = {
  * RawSendSocket
  *****************************************************************************/
 
-RawSendSocket::RawSendSocket(uint8_t port, uint32_t send_buffer_size, uint32_t max_packet) :
-  m_max_packet(max_packet), m_seq_num(0) {
+RawSendSocket::RawSendSocket(bool ground, uint32_t send_buffer_size, uint32_t max_packet) :
+  m_ground(ground), m_max_packet(max_packet), m_seq_num(0) {
 
   // Create the send buffer with the appropriate headers.
   m_hdr_len = sizeof(radiotap_header) + sizeof(ieee_header_data);
   m_send_buf.resize(m_hdr_len + max_packet);
   memcpy(m_send_buf.data(), radiotap_header, sizeof(radiotap_header));
   memcpy(m_send_buf.data() + sizeof(radiotap_header), ieee_header_data, sizeof(ieee_header_data));
-  // Set the port in the last byte of the receiver mac address
-  m_send_buf[sizeof(radiotap_header) + 15] = port & 0x1f;
 }
 
 bool RawSendSocket::add_device(const std::string &device) {
@@ -136,23 +134,21 @@ uint8_t *RawSendSocket::send_buffer() {
   return m_send_buf.data() + m_hdr_len;
 }
 
-bool RawSendSocket::send(size_t msglen, uint16_t port, LinkType type) {
+bool RawSendSocket::send(size_t msglen, uint8_t port, LinkType type) {
   // Set the sequence number
   ++m_seq_num;
-  uint32_t *seq_num_ptr = reinterpret_cast<uint32_t*>(m_send_buf.data() +
-						      sizeof(radiotap_header) + 16);
+  uint32_t *seq_num_ptr =
+    reinterpret_cast<uint32_t*>(m_send_buf.data() + sizeof(radiotap_header) + 16);
   *seq_num_ptr = m_seq_num;
-  // Set the udp port number
-  uint16_t *port_ptr = reinterpret_cast<uint16_t*>(m_send_buf.data() +
-						   sizeof(radiotap_header) + 20);
-  *port_ptr = port;
-  // Set the link type
-  m_send_buf[sizeof(radiotap_header) + 15] =
-    ((m_send_buf[sizeof(radiotap_header) + 15] & 0x1f) | (type << 5));
+
+  // Set the port in the header
+  m_send_buf[sizeof(radiotap_header) + 4] = (((port & 0xf) << 4) | (m_ground ? 0xd : 0x5));
+
+  // Send the packet
   return (::send(m_sock, m_send_buf.data(), msglen + m_hdr_len, 0) >= 0);
 }
 
-bool RawSendSocket::send(const uint8_t *msg, size_t msglen, uint16_t port, LinkType type) {
+bool RawSendSocket::send(const uint8_t *msg, size_t msglen, uint8_t port, LinkType type) {
   memcpy(send_buffer(), msg, msglen);
   return send(msglen, port, type);
 }
@@ -161,8 +157,8 @@ bool RawSendSocket::send(const uint8_t *msg, size_t msglen, uint16_t port, LinkT
  * RawReceiveSocket
  *****************************************************************************/
 
-RawReceiveSocket::RawReceiveSocket(uint8_t port, uint32_t max_packet) :
-  m_port(port), m_max_packet(max_packet) {
+RawReceiveSocket::RawReceiveSocket(bool ground, uint32_t max_packet) :
+  m_ground(ground), m_max_packet(max_packet) {
 }
 
 bool RawReceiveSocket::add_device(const std::string &device) {
@@ -197,8 +193,11 @@ bool RawReceiveSocket::add_device(const std::string &device) {
 
   // Match the first 4 bytes of the destination address.
   struct bpf_program bpfprogram;
-  char filter[128];
-  sprintf(filter, "((ether[10:4] == 0x13223344) && (ether[15] & 0x1f == %d))", m_port);
+  //char filter[128];
+  //sprintf(filter, "((ether[10:4] == 0x13223344) && (ether[15] & 0x1f == %d))", m_port);
+  const char *filter_gnd = "(ether[0x00:2] == 0x0801 || ether[0x00:2] == 0x0802 || ether[0x00:4] == 0xb4010000) && ((ether[0x04:1] & 0x0f) == 0x05)";
+  const char *filter_air = "(ether[0x00:2] == 0x0801 || ether[0x00:2] == 0x0802 || ether[0x00:4] == 0xb4010000) && ((ether[0x04:1] & 0x0f) == 0x0d)";
+  const char *filter = (m_ground ? filter_gnd : filter_air);
   if (pcap_compile(m_ppcap, &bpfprogram, filter, 1, 0) == -1) {
     m_error_msg = "Error compiling bpf program: " + std::string(filter);
     return false;
@@ -265,12 +264,11 @@ bool RawReceiveSocket::receive(monitor_message_t &msg) {
   case 0x02: // data
     m_n80211HeaderLength = 0x18;
     msg.seq_num = *reinterpret_cast<const uint32_t*>(pcap_packet_data + 16);
-    msg.port = *reinterpret_cast<const uint16_t*>(pcap_packet_data + 20);
-    msg.link_type = pcap_packet_data[15] >> 5;
     break;
   default:
     break;
   }
+  msg.port = (pcap_packet_data[4] >> 4);
   pcap_packet_data -= rt_header_len;
 
   if (pcap_packet_header->len < static_cast<uint32_t>(rt_header_len + m_n80211HeaderLength)) {

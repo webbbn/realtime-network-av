@@ -20,7 +20,7 @@ struct monitor_message_t {
     channel_flag(0), antenna(0), radiotap_flags(0) {}
   std::vector<uint8_t> data;
   uint32_t seq_num;
-  uint16_t port;
+  uint8_t port;
   uint8_t link_type;
   int8_t rssi;
   uint8_t rate;
@@ -28,41 +28,6 @@ struct monitor_message_t {
   uint16_t channel_flag;
   uint8_t antenna;
   uint8_t radiotap_flags;
-};
-
-class RawSendSocket {
-public:
-  RawSendSocket(uint8_t port, uint32_t m_buffer_size = 131072, uint32_t max_packet = 65535);
-
-  bool error() const {
-    return (m_sock < 0);
-  }
-
-  bool add_device(const std::string &device);
-
-  uint8_t *send_buffer();
-
-  // Send a message from the internal message buffer.
-  bool send(size_t msglen, uint16_t port, LinkType type);
-
-  // Copy the message into the send bufer and send it.
-  bool send(const uint8_t *msg, size_t msglen, uint16_t port, LinkType type);
-  bool send(const std::vector<uint8_t> &msg, uint16_t port, LinkType type) {
-    return send(msg.data(), msg.size(), port, type);
-  }
-
-  const std::string &error_msg() const {
-    return m_error_msg;
-  }
-
-private:
-  uint32_t m_max_packet;
-  uint32_t m_buffer_size;
-  int m_sock;
-  std::string m_error_msg;
-  std::vector<uint8_t> m_send_buf;
-  uint8_t m_hdr_len;
-  uint32_t m_seq_num;
 };
 
 struct RawReceiveStats {
@@ -80,9 +45,45 @@ struct RawReceiveStats {
   uint64_t bytes;
 };
 
+class RawSendSocket {
+public:
+  RawSendSocket(bool ground, uint32_t buffer_size = 131072, uint32_t max_packet = 65535);
+
+  bool error() const {
+    return (m_sock < 0);
+  }
+
+  bool add_device(const std::string &device);
+
+  uint8_t *send_buffer();
+
+  // Send a message from the internal message buffer.
+  bool send(size_t msglen, uint8_t port, LinkType type);
+
+  // Copy the message into the send bufer and send it.
+  bool send(const uint8_t *msg, size_t msglen, uint8_t port, LinkType type);
+  bool send(const std::vector<uint8_t> &msg, uint8_t port, LinkType type) {
+    return send(msg.data(), msg.size(), port, type);
+  }
+
+  const std::string &error_msg() const {
+    return m_error_msg;
+  }
+
+private:
+  bool m_ground;
+  uint32_t m_max_packet;
+  uint32_t m_buffer_size;
+  int m_sock;
+  std::string m_error_msg;
+  std::vector<uint8_t> m_send_buf;
+  uint8_t m_hdr_len;
+  uint32_t m_seq_num;
+};
+
 class RawReceiveSocket {
 public:
-  RawReceiveSocket(uint8_t port, uint32_t max_packet = 65535);
+  RawReceiveSocket(bool ground, uint32_t max_packet = 65535);
 
   bool add_device(const std::string &device);
 
@@ -97,7 +98,7 @@ public:
   }
 
 private:
-  uint8_t m_port;
+  bool m_ground;
   uint32_t m_max_packet;
   pcap_t *m_ppcap;
   int m_selectable_fd;

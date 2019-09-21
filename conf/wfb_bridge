@@ -1,0 +1,48 @@
+[video]
+name = Video Downlink
+direction = down
+port = 1
+inport = 5600
+outport = 5600
+outhost = 192.168.1.137
+blocksize = 1024
+blocks = 8
+fec = 4
+type = data
+priority = 1
+
+[telemetry]
+name = Telemetry Downlink
+direction = down
+port = 2
+inport = 14550
+outport = 14550
+type = data
+priority = 10
+
+[rc]
+name = Radio Control Uplink
+direction = up
+port = 3
+inport = 14551
+outport = 14551
+type = rts
+priority = 1
+
+[ipup]
+name = IP Forward Uplink
+direction = up
+port = 4
+inport = 8345
+outport = 8345
+type = data
+priority = 10
+
+[ipdown]
+name = IP Forward Downlink
+direction = down
+port = 5
+inport = 8346
+outport = 8346
+type = data
+priority = 10

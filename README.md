@@ -234,3 +234,4 @@ iw dev ${DEV} set channel 1
 cp conf/wifi_config /etc
 cp python/configure_wifi.py /usr/local/bin
 cp services/wifi_config.service /etc/systemd/system
+systemctl enable wifi_config
