@@ -34,7 +34,7 @@ cdef extern from 'fec.hh':
     cdef uint16_t m_block_size
 
     cdef cppclass FECDecoder:
-        FECDecoder(uint8_t num_blocks , uint8_t num_fec_blocks, uint16_t block_size, uint8_t interlieved)
+        FECDecoder(uint8_t num_blocks , uint8_t num_fec_blocks, uint16_t block_size)
         FECDecoder()
         uint8_t nblocks()
         uint8_t nfecblocks()
@@ -42,7 +42,7 @@ cdef extern from 'fec.hh':
         int add_block(const uint8_t * buf)
 
     cdef cppclass FECEncoder:
-        FECEncoder(uint8_t num_blocks, uint8_t num_fec_blocks, uint16_t block_size, uint8_t interlieved)
+        FECEncoder(uint8_t num_blocks, uint8_t num_fec_blocks, uint16_t block_size)
         FECEncoder()
         void encode(const uint8_t *buf, size_t buf_len)
         vector[uint8_t*] blocks()
@@ -55,9 +55,8 @@ cdef class PyFECDecode:
     cdef FECDecoder m_dec
     cdef uint16_t m_block_size;
 
-    def __cinit__(self, uint8_t num_blocks, uint8_t num_fec_blocks, uint16_t block_size,
-                  uint8_t interlieved):
-        self.m_dec = FECDecoder(num_blocks, num_fec_blocks, block_size, interlieved)
+    def __cinit__(self, uint8_t num_blocks, uint8_t num_fec_blocks, uint16_t block_size):
+        self.m_dec = FECDecoder(num_blocks, num_fec_blocks, block_size)
         self.m_block_size = block_size
 
     def add_block(self, buf):
@@ -74,9 +73,8 @@ cdef class PyFECEncoder:
     cdef FECEncoder m_enc
     cdef uint16_t m_block_size;
 
-    def __cinit__(self, uint8_t num_blocks, uint8_t num_fec_blocks, uint16_t block_size,
-                  uint8_t interlieved):
-        self.m_enc = FECEncoder(num_blocks, num_fec_blocks, block_size, interlieved)
+    def __cinit__(self, uint8_t num_blocks, uint8_t num_fec_blocks, uint16_t block_size):
+        self.m_enc = FECEncoder(num_blocks, num_fec_blocks, block_size)
         self.m_block_size = block_size
 
     def encode(self, msg):

@@ -20,6 +20,7 @@
 #include <queue>
 #include <memory>
 #include <thread>
+#include <set>
 
 #include <boost/program_options.hpp>
 
@@ -37,8 +38,6 @@
 
 namespace po=boost::program_options;
 namespace pt=boost::property_tree;
-
-static const uint32_t max_packet = 65000;
 
 std::string hostname_to_ip(const std::string &hostname);
 
@@ -226,7 +225,7 @@ int main(int argc, const char** argv) {
       uint8_t priority = v.second.get<uint8_t>("priority", 100);
 
       // Get the FEC stats (optional).
-      uint16_t blocksize = v.second.get<uint16_t>("blocksize", 1024);
+      uint16_t blocksize = v.second.get<uint16_t>("blocksize", 1500);
       uint8_t nblocks = v.second.get<uint8_t>("blocks", 0);
       uint8_t nfec_blocks = v.second.get<uint8_t>("fec", 0);
 
@@ -234,7 +233,7 @@ int main(int argc, const char** argv) {
       std::shared_ptr<FECEncoder> enc;
       LinkType link_type = DATA_LINK;
       if ((type == "data") && (nblocks > 0) && (nfec_blocks > 0) && (blocksize > 0)) {
-	enc.reset(new FECEncoder(nblocks, nfec_blocks, blocksize, false));
+	enc.reset(new FECEncoder(nblocks, nfec_blocks, blocksize));
 	link_type = DATA_LINK;
       } else if (type == "short") {
 	link_type = SHORT_DATA_LINK;
@@ -251,11 +250,11 @@ int main(int argc, const char** argv) {
       }
 
       // Create the receive thread for this socket
-      auto uth = [udp_sock, port, enc, link_type, priority, &outqueue]() {
+      auto uth = [udp_sock, port, enc, link_type, priority, blocksize, &outqueue]() {
 		   while (1) {
-		     std::shared_ptr<Message> msg(new Message(max_packet, port, link_type,
+		     std::shared_ptr<Message> msg(new Message(blocksize, port, link_type,
 							      priority, enc));
-		     size_t count = recv(udp_sock, msg->msg.data(), max_packet, 0);
+		     size_t count = recv(udp_sock, msg->msg.data(), blocksize, 0);
 		     if (count > 0) {
 		       msg->msg.resize(count);
 		       outqueue.push(msg);
@@ -283,7 +282,7 @@ int main(int argc, const char** argv) {
     double loop_time = 0;
     size_t count = 0;
     size_t pkts = 0;
-    size_t blocks = 0;
+    size_t nblocks = 0;
     size_t max_pkt = 0;
     size_t dropped_blocks = 0;
 
@@ -296,18 +295,23 @@ int main(int argc, const char** argv) {
 	msg = outqueue.pop();
 	++dropped_blocks;
       }
-      ++pkts;
       double loop_start = cur_time();
 
       // FEC encode the packet if requested.
       if (msg->enc) {
-	msg->enc->encode(msg->msg.data(), msg->msg.size());
+	// Get a FEC encoder block
+	std::shared_ptr<FECBlock> block = msg->enc->get_next_block(msg->msg.size());
+	// Copy the data into the block
+	std::copy(msg->msg.data(), msg->msg.data() + msg->msg.size(), block->data());
+	// Pass it off to the FEC encoder.
+	msg->enc->add_block(block);
 	enc_time += (cur_time() - loop_start);
 	max_pkt = std::max(static_cast<size_t>(msg->msg.size()), max_pkt);
-	for (const uint8_t *block : msg->enc->blocks()) {
-	  raw_send_sock.send(block, msg->enc->block_size() + 4, msg->port, msg->link_type);
-	  count += msg->enc->block_size() + 4;
-	  ++blocks;
+	// Transmit any packets that are finished in the encoder.
+	for (block = msg->enc->get_block(); block; block = msg->enc->get_block()) {
+	  raw_send_sock.send(block->pkt_data(), block->pkt_length(), msg->port, msg->link_type);
+	  count += block->pkt_length();
+	  ++nblocks;
 	}
 	send_time += cur_time() - loop_start;
       } else {
@@ -316,8 +320,7 @@ int main(int argc, const char** argv) {
 	send_time += (cur_time() - send_start);
 	count += msg->msg.size();
 	max_pkt = std::max(msg->msg.size(), max_pkt);
-	++pkts;
-	++blocks;
+	++nblocks;
       }
       double cur = cur_time();
       double dur = cur - start;
@@ -326,8 +329,7 @@ int main(int argc, const char** argv) {
 	if (csv) {
 	  std::cout << pkts << "," << count << "," << dropped_blocks << "," << max_pkt << std::endl;
 	} else {
-	  std::cerr << "Blocks/sec: " << int(blocks / dur)
-		    << " Packets/sec: " << int(pkts / dur)
+	  std::cerr << "Packets/sec: " << int(nblocks / dur)
 		    << " Mbps: " << 8e-6 * count / dur
 		    << " Dropped: " << dropped_blocks
 		    << " Max packet: " << max_pkt
@@ -336,7 +338,7 @@ int main(int argc, const char** argv) {
 		    << " Loop time ms: " << 1e3 * loop_time << std::endl;
 	}
 	start = cur;
-	count = pkts = blocks =  max_pkt = enc_time = send_time = loop_time = dropped_blocks = 0;
+	count = pkts = nblocks =  max_pkt = enc_time = send_time = loop_time = dropped_blocks = 0;
       }
     }
   };
@@ -439,7 +441,7 @@ int main(int argc, const char** argv) {
       std::string type = v.second.get<std::string>("type", "data");
 
       // Get the FEC stats (optional).
-      uint16_t blocksize = v.second.get<uint16_t>("blocksize", 1024);
+      uint16_t blocksize = v.second.get<uint16_t>("blocksize", 1500);
       uint8_t nblocks = v.second.get<uint8_t>("blocks", 0);
       uint8_t nfec_blocks = v.second.get<uint8_t>("fec", 0);
 
@@ -448,7 +450,7 @@ int main(int argc, const char** argv) {
       LinkType link_type = DATA_LINK;
       if ((type == "data") && (nblocks > 0) && (nfec_blocks > 0) && (blocksize > 0)) {
 	std::cerr << "enc on port " << port << std::endl;
-	enc.reset(new FECDecoder(nblocks, nfec_blocks, blocksize, false));
+	enc.reset(new FECDecoder(nblocks, nfec_blocks, blocksize));
 	link_type = DATA_LINK;
       } else if (type == "short") {
 	link_type = SHORT_DATA_LINK;

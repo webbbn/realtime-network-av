@@ -193,8 +193,6 @@ bool RawReceiveSocket::add_device(const std::string &device) {
 
   // Match the first 4 bytes of the destination address.
   struct bpf_program bpfprogram;
-  //char filter[128];
-  //sprintf(filter, "((ether[10:4] == 0x13223344) && (ether[15] & 0x1f == %d))", m_port);
   const char *filter_gnd = "(ether[0x00:2] == 0x0801 || ether[0x00:2] == 0x0802 || ether[0x00:4] == 0xb4010000) && ((ether[0x04:1] & 0x0f) == 0x05)";
   const char *filter_air = "(ether[0x00:2] == 0x0801 || ether[0x00:2] == 0x0802 || ether[0x00:4] == 0xb4010000) && ((ether[0x04:1] & 0x0f) == 0x0d)";
   const char *filter = (m_ground ? filter_gnd : filter_air);

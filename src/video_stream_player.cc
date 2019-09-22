@@ -378,7 +378,7 @@ int main(int argc, char* argv[]) {
       // Create the decode thread.
       std::thread dec_thread(decoder);
 
-      FECDecoder fec(nblocks, nfec_blocks, block_size, true);
+      FECDecoder fec(nblocks, nfec_blocks, block_size);
 
       // Pull packets off the message queue.
       bool done = false;

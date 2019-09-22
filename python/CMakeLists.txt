@@ -28,4 +28,4 @@ endif ()
 set(PYFILES fc_comm.py pycamera_tx.py)
 
 install(PROGRAMS fc_comm.py pycamera_tx.py wifi_info.py fpvng_controller.py DESTINATION bin)
-install(FILES format_as_table.py network.py camera.py wfb_process.py telemetry.py rx_process.py MultiWii.py DESTINATION ${PYTHON_INSTALL_DIR})
+install(FILES format_as_table.py network.py camera.py wfb_processes.py telemetry.py rx_process.py MultiWii.py DESTINATION ${PYTHON_INSTALL_DIR})

@@ -5,8 +5,10 @@
 #include <memory.h>
 
 #include <vector>
+#include <memory>
 #include <iostream>
 #include <set>
+#include <queue>
 
 #include <fec.h>
 
@@ -16,11 +18,102 @@ typedef enum {
   FEC_ERROR
 } FECStatus;
 
+struct __attribute__((__packed__)) FECHeader {
+  uint8_t seq_num;
+  uint8_t block;
+  uint8_t n_blocks;
+  uint8_t n_fec_blocks;
+  uint16_t length;
+};
+
+class FECBlock {
+public:
+  FECBlock(uint8_t seq_num, uint8_t block, uint8_t nblocks, uint8_t nfec_blocks, uint16_t length,
+	   uint16_t max_block_size) :
+    m_data(max_block_size + sizeof(FECHeader)) {
+    FECHeader *h = header();
+    h->seq_num = seq_num;
+    h->block = block;
+    h->n_blocks = nblocks;
+    h->n_fec_blocks = nfec_blocks;
+    h->length = length;
+    m_pkt_length = length + sizeof(FECHeader);
+  }
+
+  uint8_t *data() {
+    return m_data.data() + sizeof(FECHeader);
+  }
+  const uint8_t *data() const {
+    return data();
+  }
+
+  uint16_t data_length() const {
+    return header()->length;
+  }
+  void data_length(uint16_t len) {
+    header()->length = len;
+    m_pkt_length = len + sizeof(FECHeader);
+  }
+
+  uint8_t *fec_data() {
+    return m_data.data() + sizeof(FECHeader) - 2;
+  }
+  const uint8_t *fec_data() const {
+    return fec_data();
+  }
+
+  FECHeader *header() {
+    return reinterpret_cast<FECHeader*>(m_data.data());
+  }
+  const FECHeader *header() const {
+    return reinterpret_cast<const FECHeader*>(m_data.data());
+  }
+
+  uint8_t *pkt_data() {
+    return m_data.data();
+  }
+  const uint8_t *pkt_data() const {
+    return pkt_data();
+  }
+
+  uint16_t pkt_length() const {
+    return m_pkt_length;
+  }
+  void pkt_length(uint16_t len) {
+    m_pkt_length = len;
+  }
+
+  bool is_data_block() const {
+    return header()->block < header()->n_blocks;
+  }
+  bool is_fec_block() const {
+    return !is_data_block();
+  }
+
+private:
+  uint16_t m_pkt_length;
+  std::vector<uint8_t> m_data;
+};
+
 class FECEncoder {
 public:
 
-  FECEncoder(uint8_t num_blocks = 8, uint8_t num_fec_blocks = 4, uint16_t block_size = 1024,
-	     bool interlieved = false);
+  FECEncoder(uint8_t num_blocks = 8, uint8_t num_fec_blocks = 4, uint16_t max_block_size = 1500);
+
+  // Get a new data block
+  std::shared_ptr<FECBlock> new_block() {
+    return std::shared_ptr<FECBlock>(new FECBlock(0, 0, m_num_blocks, m_num_fec_blocks,
+						  0, m_max_block_size));
+  }
+
+  // Allocate and initialize the next data block.
+  std::shared_ptr<FECBlock> get_next_block(uint16_t length = 0);
+
+  // Add an incoming data block to be encoded
+  void add_block(std::shared_ptr<FECBlock> block);
+
+  // Retrieve the next data/fec block
+  std::shared_ptr<FECBlock> get_block();
 
   void encode(const uint8_t *buf, size_t buf_len);
 
@@ -36,22 +129,48 @@ public:
     return m_num_fec_blocks;
   }
 
-  uint16_t block_size() const {
-    return m_block_size;
+  uint16_t max_block_size() const {
+    return m_max_block_size;
   }
 
-  bool interlieved() const {
-    return m_interlieved;
+  const uint8_t *block(uint8_t idx) const {
+    return m_data_blocks[idx] - 4;
+  }
+
+  uint8_t *block(uint8_t idx) {
+    return m_data_blocks[idx] - 4;
+  }
+
+  uint16_t block_len(uint8_t idx) {
+    return ((uint16_t*)m_data_blocks[idx])[0];
+  }
+
+  const uint8_t *fec_block(uint8_t idx) const {
+    return m_fec_blocks[idx] - 4;
+  }
+
+  uint8_t *fec_block(uint8_t idx) {
+    return m_fec_blocks[idx] - 4;
+  }
+
+  uint16_t fec_block_len(uint8_t idx) {
+    return ((uint16_t*)m_fec_blocks[idx])[0];
   }
 
 private:
   uint8_t m_num_blocks;
   uint8_t m_num_fec_blocks;
-  uint16_t m_block_size;
-  bool m_interlieved;
-  uint32_t m_seq_num;
+  uint16_t m_max_block_size;
+  uint16_t m_seq_num;
+  std::vector<uint16_t> m_block_sizes;
   std::vector<uint8_t> m_buf;
+  std::vector<uint8_t*> m_data_blocks;
+  std::vector<uint8_t*> m_fec_blocks;
   std::vector<uint8_t*> m_block_ptrs;
+  std::vector<std::shared_ptr<FECBlock> > m_in_blocks;
+  std::deque<std::shared_ptr<FECBlock> > m_out_blocks;
+
+  void encode_blocks();
 };
 
 struct FECDecoderStats {
@@ -68,8 +187,7 @@ struct FECDecoderStats {
 class FECDecoder {
 public:
 
-  FECDecoder(uint8_t num_blocks = 8, uint8_t num_fec_blocks = 4, uint16_t block_size = 1024,
-	     bool interlieved = false);
+  FECDecoder(uint8_t num_blocks = 8, uint8_t num_fec_blocks = 4, uint16_t block_size = 1500);
 
   uint8_t num_blocks() const {
     return m_num_blocks;

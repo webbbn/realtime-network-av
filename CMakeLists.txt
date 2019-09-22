@@ -175,14 +175,6 @@ add_executable(wfb_bridge src/wfb_bridge.cc src/raw_socket.cc src/fec.c src/fec.
 install(TARGETS wfb_bridge DESTINATION bin COMPONENT applications)
 target_link_libraries(wfb_bridge ${Boost_LIBRARIES} pcap pthread)
 
-add_executable(raw_wifi_bridge src/raw_wifi_bridge.cc src/raw_socket.cc src/fec.c src/fec.cc src/radiotap.c)
-install(TARGETS raw_wifi_bridge DESTINATION bin COMPONENT applications)
-target_link_libraries(raw_wifi_bridge ${Boost_LIBRARIES} pcap pthread)
-
-add_executable(raw_wifi_receiver src/raw_wifi_receiver.cc src/raw_socket.cc src/radiotap.c src/fec.c src/fec.cc)
-install(TARGETS raw_wifi_receiver DESTINATION bin COMPONENT applications)
-target_link_libraries(raw_wifi_receiver ${Boost_LIBRARIES} pcap pthread)
-
 add_executable(csrf_receiver src/csrf_receiver.cc)
 install(TARGETS csrf_receiver DESTINATION bin COMPONENT applications)
 target_link_libraries(csrf_receiver ${Boost_LIBRARIES} pthread)
@@ -207,6 +199,7 @@ install(FILES "${PROJECT_SOURCE_DIR}/fonts/Cousine-Regular.ttf" DESTINATION font
 # Install the configuration files
 install(FILES "${PROJECT_SOURCE_DIR}/conf/wifi_bridge_ground.json" DESTINATION conf COMPONENT configuratios)
 install(FILES "${PROJECT_SOURCE_DIR}/conf/wifi_bridge_air.json" DESTINATION conf COMPONENT configuratios)
+install(FILES "${PROJECT_SOURCE_DIR}/conf/wfb_bridge" DESTINATION conf COMPONENT configuratios)
 
 # Create a windows installer
 if (WIN32)

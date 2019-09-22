@@ -3,19 +3,88 @@
 
 #include <fec.hh>
 
-FECEncoder::FECEncoder(uint8_t num_blocks, uint8_t num_fec_blocks, uint16_t block_size,
-		       bool interlieved) :
-  m_num_blocks(num_blocks), m_num_fec_blocks(num_fec_blocks), m_block_size(block_size),
-  m_interlieved(interlieved), m_seq_num(0) {
+FECEncoder::FECEncoder(uint8_t num_blocks, uint8_t num_fec_blocks, uint16_t max_block_size) :
+  m_num_blocks(num_blocks), m_num_fec_blocks(num_fec_blocks), m_max_block_size(max_block_size),
+  m_seq_num(0), m_block_sizes(num_blocks),
+  m_buf((max_block_size + 6) * num_blocks * num_fec_blocks) {
+
+  // Fill the block pointers.
+  m_data_blocks.resize(num_blocks);
+  m_fec_blocks.resize(num_fec_blocks);
+  for (uint8_t i = 0; i < num_blocks; ++i) {
+    m_data_blocks[i] = m_buf.data() + (m_max_block_size + 6) * i + 4;
+  }
+  for (uint8_t i = 0; i < num_fec_blocks; ++i) {
+    m_fec_blocks[i] = m_buf.data() + (m_max_block_size + 6) * (i + num_fec_blocks) + 4;
+  }
 
   // Ensure that the FEC library is initialized
   fec_init();
 }
 
+// Allocate and initialize the next data block.
+std::shared_ptr<FECBlock> FECEncoder::get_next_block(uint16_t length) {
+  return std::shared_ptr<FECBlock>(new FECBlock(m_seq_num, m_in_blocks.size(), m_num_blocks,
+						m_num_fec_blocks, length, m_max_block_size));
+}
+
+// Add an incoming data block to be encoded
+void FECEncoder::add_block(std::shared_ptr<FECBlock> block) {
+  FECHeader *h = block->header();
+  h->block = m_in_blocks.size();
+  m_in_blocks.push_back(block);
+
+  // This block can go out immediately.
+  m_out_blocks.push_front(block);
+
+  // Calculate the FEC blocks when we've received enough blocks.
+  if (h->block == (m_num_blocks - 1)) {
+    encode_blocks();
+  }
+}
+
+// Retrieve the next data/fec block
+std::shared_ptr<FECBlock> FECEncoder::get_block() {
+  if (m_out_blocks.empty()) {
+    return std::shared_ptr<FECBlock>();
+  }
+  std::shared_ptr<FECBlock> ret = m_out_blocks.back();
+  m_out_blocks.pop_back();
+  return ret;
+}
+
+void FECEncoder::encode_blocks() {
+
+  // Create the FEC arrays of pointers to the data blocks.
+  std::vector<uint8_t*> data_blocks(m_num_blocks);
+  uint16_t block_size = 0;
+  for (uint8_t i = 0; i < m_num_blocks; ++i) {
+    data_blocks[i] = m_in_blocks[i]->fec_data();
+    block_size = std::max(block_size, static_cast<uint16_t>(m_in_blocks[i]->header()->length + 2));
+  }
+
+  // Create the output FEC blocks
+  std::vector<uint8_t*> fec_blocks(m_num_fec_blocks);
+  for (uint8_t i = 0; i < m_num_fec_blocks; ++i) {
+    std::shared_ptr<FECBlock> block(new FECBlock(m_seq_num, m_num_blocks + i, m_num_blocks,
+						 m_num_fec_blocks, block_size - 2, block_size - 2));
+    fec_blocks[i] = block->fec_data();
+    block->pkt_length(block_size + sizeof(FECHeader) - 2);
+    m_out_blocks.push_front(block);
+  }
+
+  // Encode the blocks.
+  fec_encode(block_size, data_blocks.data(), m_num_blocks, fec_blocks.data(), m_num_fec_blocks);
+
+  // Prepare for the next set of blocks.
+  ++m_seq_num;
+  m_in_blocks.clear();
+}
+
 void FECEncoder::encode(const uint8_t *buf, size_t buf_len) {
 
   // Calculate the number of blocks that will be required for this message.
-  size_t block_size = m_block_size - 4;
+  size_t block_size = m_max_block_size - 4;
   size_t sub_frame_size = block_size * m_num_blocks;
   size_t n_sub_frames = ceil(double(buf_len) / sub_frame_size);
   size_t num_blocks = n_sub_frames * (m_num_blocks + m_num_fec_blocks);
@@ -59,11 +128,11 @@ void FECEncoder::encode(const uint8_t *buf, size_t buf_len) {
     for (size_t j = 0; j < m_num_fec_blocks; ++j) {
       uint8_t *ptr = m_block_ptrs[i * (m_num_blocks + m_num_fec_blocks) + m_num_blocks + j];
       fec_blocks[j] = ptr + 4;
-      memset(fec_blocks[j], 0, m_block_size);
+      memset(fec_blocks[j], 0, m_max_block_size);
     }
 
     // Encode the blocks.
-    fec_encode(m_block_size, data_blocks.data(), m_num_blocks, fec_blocks.data(),
+    fec_encode(m_max_block_size, data_blocks.data(), m_num_blocks, fec_blocks.data(),
 	       m_num_fec_blocks);
 
     // Insert the block data pointers into the output array. Interlieve if requested.
@@ -75,32 +144,21 @@ void FECEncoder::encode(const uint8_t *buf, size_t buf_len) {
       uint32_t *dp32 = reinterpret_cast<uint32_t*>(dp8);
       dp32[0] = m_seq_num++;
       m_block_ptrs[oi++] = dp8;
-
-      // Add the FEC block if interlieving was requested
-      if (m_interlieved && (j < m_num_fec_blocks)) {
-	uint8_t *dp8 = fec_blocks[j] - 4;
-	uint32_t *dp32 = reinterpret_cast<uint32_t*>(dp8);
-	dp32[0] = m_seq_num++;
-	m_block_ptrs[oi++] = dp8;
-      }
     }
 
-    // Add the FEC blocks if interlieving was not requested
-    if (!m_interlieved) {
-      for (size_t j = 0; j < m_num_fec_blocks; ++j) {
-	uint8_t *dp8 = fec_blocks[j] - 4;
-	uint32_t *dp32 = reinterpret_cast<uint32_t*>(dp8);
-	dp32[0] = m_seq_num++;
-	m_block_ptrs[oi++] = dp8;
-      }
+    // Add the FEC blocks.
+    for (size_t j = 0; j < m_num_fec_blocks; ++j) {
+      uint8_t *dp8 = fec_blocks[j] - 4;
+      uint32_t *dp32 = reinterpret_cast<uint32_t*>(dp8);
+      dp32[0] = m_seq_num++;
+      m_block_ptrs[oi++] = dp8;
     }
   }
 }
 
-FECDecoder::FECDecoder(uint8_t num_blocks, uint8_t num_fec_blocks, uint16_t block_size,
-		       bool interlieved) :
+FECDecoder::FECDecoder(uint8_t num_blocks, uint8_t num_fec_blocks, uint16_t block_size) :
   m_num_blocks(num_blocks), m_num_fec_blocks(num_fec_blocks), m_block_size(block_size),
-  m_interlieved(interlieved), m_packet_num(0), m_prev_seq_num(0), m_bad_seq_count(0),
+  m_packet_num(0), m_prev_seq_num(0), m_bad_seq_count(0),
   m_buf((num_blocks + num_fec_blocks) * block_size),
   
   m_block_ptrs(num_blocks + num_fec_blocks) {
@@ -150,13 +208,6 @@ FECStatus FECDecoder::add_block(const uint8_t *buf) {
   if (pn == m_packet_num) {
     uint32_t ibn = bn;
     // Are the data blocks and FEC blocks interleaved?
-    if (m_interlieved) {
-      if (bn < (m_num_fec_blocks * 2)) {
-	ibn = bn / 2 + (bn % 2) * m_num_blocks;
-      } else {
-	ibn = (bn - m_num_fec_blocks);
-      }
-    }
     memcpy(m_block_ptrs[ibn], buf + 4, m_block_size);
     m_set_blocks.insert(ibn);
   } else if (pn > m_packet_num) {
