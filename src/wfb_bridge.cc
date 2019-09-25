@@ -52,7 +52,7 @@ struct Message {
 };
 
 struct UDPDestination {
-  UDPDestination(uint16_t port, const std::string &hostname, std::shared_ptr<FECDecoder> enc) :
+  UDPDestination(uint16_t port, const std::string &hostname, std::shared_ptr<FECDecoder2> enc) :
     fec(enc) {
 
     // Initialize the UDP output socket.
@@ -71,7 +71,7 @@ struct UDPDestination {
     s.sin_addr.s_addr = inet_addr(ip.c_str());
   }
   struct sockaddr_in s;
-  std::shared_ptr<FECDecoder> fec;
+  std::shared_ptr<FECDecoder2> fec;
 };
 
 
@@ -291,10 +291,12 @@ int main(int argc, const char** argv) {
 
       // Pull the next packet off the queue
       std::shared_ptr<Message> msg = outqueue.pop();
+/*
       while(outqueue.size() > max_queue_size) {
 	msg = outqueue.pop();
 	++dropped_blocks;
       }
+*/
       double loop_start = cur_time();
 
       // FEC encode the packet if requested.
@@ -446,11 +448,10 @@ int main(int argc, const char** argv) {
       uint8_t nfec_blocks = v.second.get<uint8_t>("fec", 0);
 
       // Create the FEC encoder if requested.
-      std::shared_ptr<FECDecoder> enc;
+      std::shared_ptr<FECDecoder2> enc;
       LinkType link_type = DATA_LINK;
       if ((type == "data") && (nblocks > 0) && (nfec_blocks > 0) && (blocksize > 0)) {
-	std::cerr << "enc on port " << port << std::endl;
-	enc.reset(new FECDecoder(nblocks, nfec_blocks, blocksize));
+	enc.reset(new FECDecoder2());
 	link_type = DATA_LINK;
       } else if (type == "short") {
 	link_type = SHORT_DATA_LINK;
@@ -478,7 +479,7 @@ int main(int argc, const char** argv) {
 
     // Pull the next block off the message queue.
     std::shared_ptr<monitor_message_t> buf = inqueue.pop();
-
+    
     // Lookup the destination class.
     if (!udp_out[buf->port]) {
       std::cerr << "Error finding the output destination for port " << buf->port << std::endl;
@@ -487,33 +488,17 @@ int main(int argc, const char** argv) {
 
     // Is the packet FEC encoded?
     if (udp_out[buf->port]->fec) {
-      std::shared_ptr<FECDecoder> fec = udp_out[buf->port]->fec;
+      std::shared_ptr<FECDecoder2> fec = udp_out[buf->port]->fec;
 
       // Add this block to the FEC decoder.
-      if (fec->add_block(buf->data.data()) == FECStatus::FEC_COMPLETE) {
+      fec->add_block(buf->data.data(), buf->data.size());
 
-	// Output the data blocks
-	const std::vector<uint8_t*> &blocks = fec->blocks();
-	for (size_t b = 0; b < fec->num_blocks(); ++b) {
-	  const uint8_t *block = blocks[b];
-	  uint32_t cur_block_size = *reinterpret_cast<const uint32_t*>(block);
-	  if (cur_block_size > 0) {
-	    sendto(send_sock, block + 4, cur_block_size, 0,
-		   (struct sockaddr *)&(udp_out[buf->port]->s), sizeof(struct sockaddr_in));
-	  }
+      // Output any packets that are finished in the decoder.
+      for (std::shared_ptr<FECBlock> block = fec->get_block(); block; block = fec->get_block()) {
+	if (block->data_length() > 0) {
+	  sendto(send_sock, block->data(), block->data_length(), 0,
+		 (struct sockaddr *)&(udp_out[buf->port]->s), sizeof(struct sockaddr_in));
 	}
-      }
-
-      double dur = (cur_time() - prev_time);
-      if (dur > 2.0) {
-	// Combine all decoder stats.
-	const FECDecoderStats &stats = fec->stats();
-	std::cerr
-	  << "Decode stats: "
-	  << stats.total_packets - prev_stats.total_packets << " / "
-	  << stats.dropped_packets - prev_stats.dropped_packets << std::endl;
-	prev_time = cur_time();
-	prev_stats = stats;
       }
 
     } else {

@@ -19,6 +19,7 @@ typedef enum {
 } FECStatus;
 
 struct __attribute__((__packed__)) FECHeader {
+  FECHeader() : seq_num(0), block(0), n_blocks(0), n_fec_blocks(0), length() {}
   uint8_t seq_num;
   uint8_t block;
   uint8_t n_blocks;
@@ -28,16 +29,30 @@ struct __attribute__((__packed__)) FECHeader {
 
 class FECBlock {
 public:
-  FECBlock(uint8_t seq_num, uint8_t block, uint8_t nblocks, uint8_t nfec_blocks, uint16_t length,
-	   uint16_t max_block_size) :
-    m_data(max_block_size + sizeof(FECHeader)) {
+  FECBlock(uint8_t seq_num, uint8_t block, uint8_t nblocks, uint8_t nfec_blocks,
+	   uint16_t data_length) :
+    m_data(data_length + sizeof(FECHeader)) {
     FECHeader *h = header();
     h->seq_num = seq_num;
     h->block = block;
     h->n_blocks = nblocks;
     h->n_fec_blocks = nfec_blocks;
-    h->length = length;
-    m_pkt_length = length + sizeof(FECHeader);
+    h->length = data_length;
+    m_pkt_length = data_length + sizeof(FECHeader);
+  }
+  FECBlock(const uint8_t *buf, uint16_t pkt_length) {
+    m_data.resize(pkt_length);
+    std::copy(buf, buf + pkt_length, m_data.data());
+    m_pkt_length = pkt_length;
+  }
+  FECBlock(const FECHeader &h, uint16_t block_length) {
+    m_data.resize(block_length + sizeof(FECHeader) - 2);
+    *header() = h;
+    data_length(block_length - 2);
+  }
+
+  uint16_t block_size() const {
+    return (m_pkt_length + 2) - sizeof(FECHeader);
   }
 
   uint8_t *data() {
@@ -102,8 +117,7 @@ public:
 
   // Get a new data block
   std::shared_ptr<FECBlock> new_block() {
-    return std::shared_ptr<FECBlock>(new FECBlock(0, 0, m_num_blocks, m_num_fec_blocks,
-						  0, m_max_block_size));
+    return std::shared_ptr<FECBlock>(new FECBlock(0, 0, m_num_blocks, m_num_fec_blocks, 0));
   }
 
   // Allocate and initialize the next data block.
@@ -167,8 +181,8 @@ private:
   std::vector<uint8_t*> m_data_blocks;
   std::vector<uint8_t*> m_fec_blocks;
   std::vector<uint8_t*> m_block_ptrs;
-  std::vector<std::shared_ptr<FECBlock> > m_in_blocks;
-  std::deque<std::shared_ptr<FECBlock> > m_out_blocks;
+ std::vector<std::shared_ptr<FECBlock> > m_in_blocks;
+ std::queue<std::shared_ptr<FECBlock> > m_out_blocks;
 
   void encode_blocks();
 };
@@ -201,10 +215,6 @@ public:
     return m_block_size;
   }
 
-  bool interlieved() const {
-    return m_interlieved;
-  }
-
   std::vector<uint8_t*> &blocks() {
     return m_block_ptrs;
   }
@@ -219,11 +229,11 @@ private:
   uint8_t m_num_blocks;
   uint8_t m_num_fec_blocks;
   uint16_t m_block_size;
-  bool m_interlieved;
   uint32_t m_packet_num;
   uint32_t m_prev_seq_num;
   uint8_t m_bad_seq_count;
   std::vector<uint8_t> m_buf;
+
   std::vector<uint8_t*> m_block_ptrs;
   std::vector<uint8_t*> m_fec_ptrs;
   std::set<uint8_t> m_set_blocks;
@@ -232,6 +242,37 @@ private:
   void reset(uint32_t pn);
 
   bool decode();
+};
+
+class FECDecoder2 {
+public:
+
+  FECDecoder2();
+
+  void add_block(const uint8_t *buf, uint16_t block_length);
+
+  // Retrieve the next data/fec block
+  std::shared_ptr<FECBlock> get_block();
+
+  const FECDecoderStats &stats() const {
+    return m_stats;
+  }
+
+private:
+  // The block size of the current sequence (0 on restart)
+  uint16_t m_block_size;
+  // The previous header received
+  FECHeader m_prev_header;
+  // The blocks that have been received previously for this sequence
+  std::vector<std::shared_ptr<FECBlock> > m_blocks;
+  // The FEC blocks that have been received previously for this sequence
+  std::vector<std::shared_ptr<FECBlock> > m_fec_blocks;
+  // The output queue of blocks
+  std::queue<std::shared_ptr<FECBlock> > m_out_blocks;
+  // The running total of the decoder status
+  FECDecoderStats m_stats;
+
+  void decode();
 };
 
 #endif //FEC_ENCODER_HH
