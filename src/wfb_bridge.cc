@@ -291,26 +291,26 @@ int main(int argc, const char** argv) {
 
       // Pull the next packet off the queue
       std::shared_ptr<Message> msg = outqueue.pop();
-/*
-      while(outqueue.size() > max_queue_size) {
-	msg = outqueue.pop();
-	++dropped_blocks;
-      }
-*/
       double loop_start = cur_time();
 
       // FEC encode the packet if requested.
       if (msg->enc) {
+	auto dec = msg->enc;
 	// Get a FEC encoder block
-	std::shared_ptr<FECBlock> block = msg->enc->get_next_block(msg->msg.size());
+	std::shared_ptr<FECBlock> block = dec->get_next_block(msg->msg.size());
 	// Copy the data into the block
 	std::copy(msg->msg.data(), msg->msg.data() + msg->msg.size(), block->data());
 	// Pass it off to the FEC encoder.
-	msg->enc->add_block(block);
+	dec->add_block(block);
 	enc_time += (cur_time() - loop_start);
 	max_pkt = std::max(static_cast<size_t>(msg->msg.size()), max_pkt);
 	// Transmit any packets that are finished in the encoder.
-	for (block = msg->enc->get_block(); block; block = msg->enc->get_block()) {
+	for (block = dec->get_block(); block; block = dec->get_block()) {
+	  // If the link slower than the data rate we need to drop some packets.
+	  if (block->is_fec_block() & (dec->n_output_blocks() > max_queue_size)) {
+	    ++dropped_blocks;
+	    continue;
+	  }
 	  raw_send_sock.send(block->pkt_data(), block->pkt_length(), msg->port, msg->link_type);
 	  count += block->pkt_length();
 	  ++nblocks;

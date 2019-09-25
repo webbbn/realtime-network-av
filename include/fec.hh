@@ -128,6 +128,9 @@ public:
 
   // Retrieve the next data/fec block
   std::shared_ptr<FECBlock> get_block();
+  size_t n_output_blocks() const {
+    return m_out_blocks.size();
+  }
 
   void encode(const uint8_t *buf, size_t buf_len);
 
