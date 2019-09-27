@@ -41,13 +41,24 @@ namespace pt=boost::property_tree;
 
 std::string hostname_to_ip(const std::string &hostname);
 
+struct WifiOptions {
+  WifiOptions(LinkType type = DATA_LINK, uint8_t rate = 18, bool m = false, bool s = false, bool l = false) :
+    link_type(type), data_rate(rate), mcs(m), stbc(s), ldpc(l) { }
+  LinkType link_type;
+  uint8_t data_rate;
+  bool mcs;
+  bool stbc;
+  bool ldpc;
+};
+
 struct Message {
-  Message(size_t max_packet, uint8_t p, LinkType lt, uint8_t priority,
-	  std::shared_ptr<FECEncoder> e) : msg(max_packet), port(p), link_type(lt), enc(e) { }
+  Message(size_t max_packet, uint8_t p, uint8_t pri, WifiOptions opt,
+	  std::shared_ptr<FECEncoder> e) :
+    msg(max_packet), port(p), priority(pri), opts(opt), enc(e) { }
   std::vector<uint8_t> msg;
   uint8_t port;
   uint8_t priority;
-  LinkType link_type;
+  WifiOptions opts;
   std::shared_ptr<FECEncoder> enc;
 };
 
@@ -229,6 +240,13 @@ int main(int argc, const char** argv) {
       uint8_t nblocks = v.second.get<uint8_t>("blocks", 0);
       uint8_t nfec_blocks = v.second.get<uint8_t>("fec", 0);
 
+      // Get the Tx parameters (optional).
+      WifiOptions opts;
+      opts.data_rate = v.second.get<uint8_t>("datarate", 18);
+      opts.mcs = v.second.get<uint8_t>("mcs", 0) ? true : false;
+      opts.stbc = v.second.get<uint8_t>("mcs", 0) ? true : false;
+      opts.ldpc = v.second.get<uint8_t>("mcs", 0) ? true : false;
+
       // Create the FEC encoder if requested.
       std::shared_ptr<FECEncoder> enc;
       LinkType link_type = DATA_LINK;
@@ -250,10 +268,10 @@ int main(int argc, const char** argv) {
       }
 
       // Create the receive thread for this socket
-      auto uth = [udp_sock, port, enc, link_type, priority, blocksize, &outqueue]() {
+      auto uth = [udp_sock, port, enc, opts, priority, blocksize, &outqueue]() {
 		   while (1) {
-		     std::shared_ptr<Message> msg(new Message(blocksize, port, link_type,
-							      priority, enc));
+		     std::shared_ptr<Message> msg(new Message(blocksize, port, priority, opts,
+							      enc));
 		     size_t count = recv(udp_sock, msg->msg.data(), blocksize, 0);
 		     if (count > 0) {
 		       msg->msg.resize(count);
@@ -311,14 +329,15 @@ int main(int argc, const char** argv) {
 	    ++dropped_blocks;
 	    continue;
 	  }
-	  raw_send_sock.send(block->pkt_data(), block->pkt_length(), msg->port, msg->link_type);
+	  raw_send_sock.send(block->pkt_data(), block->pkt_length(), msg->port, msg->opts.link_type,
+			     msg->opts.data_rate, msg->opts.mcs, msg->opts.stbc, msg->opts.ldpc);
 	  count += block->pkt_length();
 	  ++nblocks;
 	}
 	send_time += cur_time() - loop_start;
       } else {
 	double send_start = cur_time();
-	raw_send_sock.send(msg->msg, msg->port, msg->link_type);
+	raw_send_sock.send(msg->msg, msg->port, msg->opts.link_type);
 	send_time += (cur_time() - send_start);
 	count += msg->msg.size();
 	max_pkt = std::max(msg->msg.size(), max_pkt);
@@ -479,7 +498,7 @@ int main(int argc, const char** argv) {
 
     // Pull the next block off the message queue.
     std::shared_ptr<monitor_message_t> buf = inqueue.pop();
-    
+
     // Lookup the destination class.
     if (!udp_out[buf->port]) {
       std::cerr << "Error finding the output destination for port " << buf->port << std::endl;

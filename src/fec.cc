@@ -331,7 +331,6 @@ void FECDecoder2::add_block(const uint8_t *buf, uint16_t block_length) {
 
   // The current block size is equal to the block size of the largest block.
   m_block_size = std::max(m_block_size, blk->block_size());
-
   // Is this a data block or FEC block?
   if (blk->is_data_block()) {
 

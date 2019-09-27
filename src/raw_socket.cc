@@ -19,6 +19,26 @@
 
 #include <pcap-bpf.h>
 #include <radiotap.h>
+#define IEEE80211_RADIOTAP_MCS_HAVE_BW    0x01
+#define IEEE80211_RADIOTAP_MCS_HAVE_MCS   0x02
+#define IEEE80211_RADIOTAP_MCS_HAVE_GI    0x04
+#define IEEE80211_RADIOTAP_MCS_HAVE_FMT   0x08
+
+#define IEEE80211_RADIOTAP_MCS_BW_20    0
+#define IEEE80211_RADIOTAP_MCS_BW_40    1
+#define IEEE80211_RADIOTAP_MCS_BW_20L   2
+#define IEEE80211_RADIOTAP_MCS_BW_20U   3
+#define IEEE80211_RADIOTAP_MCS_SGI      0x04
+#define IEEE80211_RADIOTAP_MCS_FMT_GF   0x08
+#define IEEE80211_RADIOTAP_MCS_HAVE_FEC   0x10
+#define IEEE80211_RADIOTAP_MCS_HAVE_STBC  0x20
+
+#define IEEE80211_RADIOTAP_MCS_FEC_LDPC   0x10
+#define	IEEE80211_RADIOTAP_MCS_STBC_MASK  0x60
+#define	IEEE80211_RADIOTAP_MCS_STBC_1  1
+#define	IEEE80211_RADIOTAP_MCS_STBC_2  2
+#define	IEEE80211_RADIOTAP_MCS_STBC_3  3
+#define	IEEE80211_RADIOTAP_MCS_STBC_SHIFT 5
 
 typedef struct {
   pcap_t *ppcap;
@@ -28,12 +48,32 @@ typedef struct {
 
 static uint8_t radiotap_header[] = {
   0x00, 0x00, // <-- radiotap version
+  0x0d, 0x00, // <- radiotap header length
+  0x04, 0x80, 0x08, 0x00, // <-- radiotap present flags (rate (bit 2) + tx flags (bit 15) + mcs flags (bit 19))
+  0x6c, // datarate
+  0x00,  // RADIOTAP_F_TX_NOACK
+  0x00, 0x00, 0x00 // bitmap, flags, mcs_index
+};
+
+/*
+static uint8_t radiotap_header_80211n[] {
+  0x00, 0x00, // <-- radiotap version
+  0x0d, 0x00, // <- radiotap header length
+  0x00, 0x80, 0x08, 0x00, // <-- radiotap present flags:  RADIOTAP_TX_FLAGS + RADIOTAP_MCS
+  0x08, // datarate
+  0x00,  // RADIOTAP_F_TX_NOACK
+  0x00, 0x00, 0x00 // bitmap, flags, mcs_index
+};
+
+static uint8_t radiotap_header[] = {
+  0x00, 0x00, // <-- radiotap version
   0x0c, 0x00, // <- radiotap header length
-  0x04, 0x80, 0x00, 0x00, // <-- radiotap present flags (rate + tx flags)
-  0x6c, // datarate (will be overwritten later in packet_header_init)
+  0x04, 0x80, 0x00, 0x00, // <-- radiotap present flags (rate (bit 2) + tx flags (bit 15))
+  0x6c, // datarate
   0x00, // ??
   0x00, 0x00 // ??
 };
+*/
 
 static uint8_t u8aIeeeHeader_data_short[] = {
   0x08, 0x01, 0x00, 0x00, // frame control field (2bytes), duration (2 bytes)
@@ -134,7 +174,68 @@ uint8_t *RawSendSocket::send_buffer() {
   return m_send_buf.data() + m_hdr_len;
 }
 
-bool RawSendSocket::send(size_t msglen, uint8_t port, LinkType type) {
+bool RawSendSocket::send(size_t msglen, uint8_t port, LinkType type,
+			 uint8_t datarate, bool mcs, bool stbc, bool ldpc) {
+
+/*
+  // Set the data rate in the header
+  switch (datarate) {
+  case 1:
+    m_send_buf[8]=0x02;
+    break;
+  case 2:
+    m_send_buf[8]=0x04;
+    break;
+  case 5: // 5.5
+    m_send_buf[8]=0x0b;
+    break;
+  case 6:
+    m_send_buf[8]=0x0c;
+    break;
+  case 11:
+    m_send_buf[8]=0x16;
+    break;
+  case 12:
+    m_send_buf[8]=0x18;
+    break;
+  case 18:
+    m_send_buf[8]=0x24;
+    break;
+  case 24:
+    m_send_buf[8]=0x30;
+    break;
+  case 36:
+    m_send_buf[8]=0x48;
+    break;
+  case 48:
+    m_send_buf[8]=0x60;
+    break;
+  default:
+    std::cerr << "Incorrect rate set.";
+    break;
+  }
+
+  // Set the 802.11n options if requested
+  uint8_t mcs_flags = 0;
+  uint8_t mcs_known = 0;
+  if (mcs) {
+    mcs_flags = 0;
+    mcs_known = (IEEE80211_RADIOTAP_MCS_HAVE_MCS |
+		 IEEE80211_RADIOTAP_MCS_HAVE_BW |
+		 IEEE80211_RADIOTAP_MCS_HAVE_GI |
+		 IEEE80211_RADIOTAP_MCS_HAVE_STBC |
+		 IEEE80211_RADIOTAP_MCS_HAVE_FEC);
+    if(stbc) {
+      mcs_flags = mcs_flags | IEEE80211_RADIOTAP_MCS_STBC_1 << IEEE80211_RADIOTAP_MCS_STBC_SHIFT;
+    }
+    if(ldpc) {
+      mcs_flags = mcs_flags | IEEE80211_RADIOTAP_MCS_FEC_LDPC;
+    }
+  }
+  m_send_buf[10] = mcs_known;
+  m_send_buf[11] = mcs_flags;
+*/
+
   // Set the sequence number
   ++m_seq_num;
   uint32_t *seq_num_ptr =
@@ -148,9 +249,10 @@ bool RawSendSocket::send(size_t msglen, uint8_t port, LinkType type) {
   return (::send(m_sock, m_send_buf.data(), msglen + m_hdr_len, 0) >= 0);
 }
 
-bool RawSendSocket::send(const uint8_t *msg, size_t msglen, uint8_t port, LinkType type) {
+bool RawSendSocket::send(const uint8_t *msg, size_t msglen, uint8_t port, LinkType type,
+			 uint8_t datarate, bool mcs, bool stbc, bool ldpc) {
   memcpy(send_buffer(), msg, msglen);
-  return send(msglen, port, type);
+  return send(msglen, port, type, datarate, mcs, stbc, ldpc);
 }
 
 /******************************************************************************

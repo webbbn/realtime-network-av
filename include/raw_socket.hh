@@ -58,12 +58,15 @@ public:
   uint8_t *send_buffer();
 
   // Send a message from the internal message buffer.
-  bool send(size_t msglen, uint8_t port, LinkType type);
+  bool send(size_t msglen, uint8_t port, LinkType type, uint8_t datarate = 18,
+	    bool mcs = false, bool stbc = false, bool ldpc = false);
 
   // Copy the message into the send bufer and send it.
-  bool send(const uint8_t *msg, size_t msglen, uint8_t port, LinkType type);
-  bool send(const std::vector<uint8_t> &msg, uint8_t port, LinkType type) {
-    return send(msg.data(), msg.size(), port, type);
+  bool send(const uint8_t *msg, size_t msglen, uint8_t port, LinkType type,
+	    uint8_t datarate = 18, bool mcs = false, bool stbc = false, bool ldpc = false);
+  bool send(const std::vector<uint8_t> &msg, uint8_t port, LinkType type,
+	    uint8_t datarate = 18, bool mcs = false, bool stbc = false, bool ldpc = false) {
+    return send(msg.data(), msg.size(), port, type, datarate, mcs, stbc, ldpc);
   }
 
   const std::string &error_msg() const {
