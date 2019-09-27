@@ -50,30 +50,10 @@ static uint8_t radiotap_header[] = {
   0x00, 0x00, // <-- radiotap version
   0x0d, 0x00, // <- radiotap header length
   0x04, 0x80, 0x08, 0x00, // <-- radiotap present flags (rate (bit 2) + tx flags (bit 15) + mcs flags (bit 19))
-  0x6c, // datarate
-  0x00,  // RADIOTAP_F_TX_NOACK
-  0x00, 0x00, 0x00 // bitmap, flags, mcs_index
-};
-
-/*
-static uint8_t radiotap_header_80211n[] {
-  0x00, 0x00, // <-- radiotap version
-  0x0d, 0x00, // <- radiotap header length
-  0x00, 0x80, 0x08, 0x00, // <-- radiotap present flags:  RADIOTAP_TX_FLAGS + RADIOTAP_MCS
   0x08, // datarate
   0x00,  // RADIOTAP_F_TX_NOACK
   0x00, 0x00, 0x00 // bitmap, flags, mcs_index
 };
-
-static uint8_t radiotap_header[] = {
-  0x00, 0x00, // <-- radiotap version
-  0x0c, 0x00, // <- radiotap header length
-  0x04, 0x80, 0x00, 0x00, // <-- radiotap present flags (rate (bit 2) + tx flags (bit 15))
-  0x6c, // datarate
-  0x00, // ??
-  0x00, 0x00 // ??
-};
-*/
 
 static uint8_t u8aIeeeHeader_data_short[] = {
   0x08, 0x01, 0x00, 0x00, // frame control field (2bytes), duration (2 bytes)
@@ -176,8 +156,7 @@ uint8_t *RawSendSocket::send_buffer() {
 
 bool RawSendSocket::send(size_t msglen, uint8_t port, LinkType type,
 			 uint8_t datarate, bool mcs, bool stbc, bool ldpc) {
-
-/*
+	    
   // Set the data rate in the header
   switch (datarate) {
   case 1:
@@ -234,7 +213,6 @@ bool RawSendSocket::send(size_t msglen, uint8_t port, LinkType type,
   }
   m_send_buf[10] = mcs_known;
   m_send_buf[11] = mcs_flags;
-*/
 
   // Set the sequence number
   ++m_seq_num;

@@ -244,8 +244,8 @@ int main(int argc, const char** argv) {
       WifiOptions opts;
       opts.data_rate = v.second.get<uint8_t>("datarate", 18);
       opts.mcs = v.second.get<uint8_t>("mcs", 0) ? true : false;
-      opts.stbc = v.second.get<uint8_t>("mcs", 0) ? true : false;
-      opts.ldpc = v.second.get<uint8_t>("mcs", 0) ? true : false;
+      opts.stbc = v.second.get<uint8_t>("stbc", 0) ? true : false;
+      opts.ldpc = v.second.get<uint8_t>("ldpc", 0) ? true : false;
 
       // Create the FEC encoder if requested.
       std::shared_ptr<FECEncoder> enc;

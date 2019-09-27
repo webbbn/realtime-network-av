@@ -10,6 +10,10 @@ blocks = 8
 fec = 4
 type = data
 priority = 1
+mcs = 0
+stbc = 1
+ldpc = 1
+datarate = 18
 
 [telemetry]
 name = Telemetry Downlink
