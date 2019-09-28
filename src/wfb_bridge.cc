@@ -4,7 +4,6 @@
 #include <stdint.h>
 #include <unistd.h>
 #include <sys/socket.h>
-#include <sys/types.h>
 #include <netinet/ether.h>
 #include <netpacket/packet.h>
 #include <net/if.h>
@@ -12,7 +11,6 @@
 #include <arpa/inet.h>
 #include <sys/time.h>
 #include <time.h>
-#include <ifaddrs.h>
 
 #include <iostream>
 #include <string>
@@ -87,53 +85,6 @@ struct UDPDestination {
   std::shared_ptr<FECDecoder> fec;
 };
 
-bool get_wifi_devices(std::vector<std::string> &ifnames) {
-  int family, s, n;
-  char host[NI_MAXHOST];
-
-  // Get the wifi interfaces.
-  struct ifaddrs *ifaddr;
-  if (getifaddrs(&ifaddr) == -1) {
-    return true;
-  }
-
-  // Walk through linked list, maintaining head pointer so we can free list later
-  struct ifaddrs *ifa;
-  for (ifa = ifaddr, n = 0; ifa != NULL; ifa = ifa->ifa_next, n++) {
-    if (ifa->ifa_addr == NULL) {
-      continue;
-    }
-
-    int family = ifa->ifa_addr->sa_family;
-
-    // Display interface name and family (including symbolic form of the latter for the common families)
-    printf("%-8s %s (%d)\n",
-	   ifa->ifa_name,
-	   (family == AF_PACKET) ? "AF_PACKET" :
-	   (family == AF_INET) ? "AF_INET" :
-	   (family == AF_INET6) ? "AF_INET6" : "???",
-	   family);
-
-    // For an AF_INET* interface address, display the address
-    if (family == AF_INET || family == AF_INET6) {
-      s = getnameinfo(ifa->ifa_addr,
-		      (family == AF_INET) ? sizeof(struct sockaddr_in) :
-		      sizeof(struct sockaddr_in6),
-		      host, NI_MAXHOST,
-		      NULL, 0, NI_NUMERICHOST);
-      if (s != 0) {
-	printf("getnameinfo() failed: %s\n", gai_strerror(s));
-	exit(EXIT_FAILURE);
-      }
-
-      printf("\t\taddress: <%s>\n", host);
-
-    }
-  }
-
-  freeifaddrs(ifaddr);
-  return true;
-}
 
 std::string hostname_to_ip(const std::string &hostname) {
 
@@ -244,9 +195,6 @@ int main(int argc, const char** argv) {
     std::cerr << "Error reading the configuration file: " << conf_file << std::endl;
     return EXIT_FAILURE;
   }
-
-  std::vector<std::string> ifnames;
-  get_wifi_devices(ifnames);
 
   // Create the message queues.
   SharedQueue<std::shared_ptr<monitor_message_t> > inqueue;   // Wifi to UDP
