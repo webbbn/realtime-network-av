@@ -45,6 +45,9 @@ struct RawReceiveStats {
   uint64_t bytes;
 };
 
+// Get a list of all the network device names
+bool detect_network_devices(std::vector<std::string> &ifnames);
+
 class RawSendSocket {
 public:
   RawSendSocket(bool ground, uint32_t buffer_size = 131072, uint32_t max_packet = 65535);

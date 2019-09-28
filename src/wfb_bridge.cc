@@ -12,7 +12,6 @@
 #include <arpa/inet.h>
 #include <sys/time.h>
 #include <time.h>
-#include <ifaddrs.h>
 
 #include <iostream>
 #include <string>
@@ -89,31 +88,6 @@ struct UDPDestination {
   struct sockaddr_in s;
   std::shared_ptr<FECDecoder> fec;
 };
-
-bool get_net_devices(std::vector<std::string> &ifnames) {
-  ifnames.clear();
-
-  // Get the wifi interfaces.
-  struct ifaddrs *ifaddr;
-  if (getifaddrs(&ifaddr) == -1) {
-    return false;
-  }
-
-  // Create the list of interface names.
-  struct ifaddrs *ifa;
-  for (ifa = ifaddr; ifa != NULL; ifa = ifa->ifa_next) {
-    if (ifa->ifa_addr == NULL) {
-      continue;
-    }
-    // Only return AF_PACKET interfaces
-    if (ifa->ifa_addr->sa_family == AF_PACKET) {
-      ifnames.push_back(ifa->ifa_name);
-    }
-  }
-
-  freeifaddrs(ifaddr);
-  return true;
-}
 
 std::string hostname_to_ip(const std::string &hostname) {
 
@@ -324,8 +298,9 @@ int main(int argc, const char** argv) {
 
   // Get a list of the network devices.
   std::vector<std::string> ifnames;
-  if (!get_net_devices(ifnames)) {
+  if (!detect_network_devices(ifnames)) {
     LOG_CRITICAL << "Error reading the network interfaces.";
+    return EXIT_FAILURE;
   }
 
   // Open the raw transmit socket

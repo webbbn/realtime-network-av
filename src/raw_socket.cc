@@ -13,6 +13,7 @@
 #include <arpa/inet.h>
 #include <sys/time.h>
 #include <linux/wireless.h>
+#include <ifaddrs.h>
 
 #include <iostream>
 
@@ -76,6 +77,33 @@ static uint8_t u8aIeeeHeader_rts[] = {
   0xff, //  port = 1st byte of IEEE802.11 RA (mac) must be something odd
   // (wifi hardware determines broadcast/multicast through odd/even check)
 };
+
+
+bool detect_network_devices(std::vector<std::string> &ifnames) {
+  ifnames.clear();
+
+  // Get the wifi interfaces.
+  struct ifaddrs *ifaddr;
+  if (getifaddrs(&ifaddr) == -1) {
+    return false;
+  }
+
+  // Create the list of interface names.
+  struct ifaddrs *ifa;
+  for (ifa = ifaddr; ifa != NULL; ifa = ifa->ifa_next) {
+    if (ifa->ifa_addr == NULL) {
+      continue;
+    }
+    // Only return AF_PACKET interfaces
+    if (ifa->ifa_addr->sa_family == AF_PACKET) {
+      ifnames.push_back(ifa->ifa_name);
+    }
+  }
+
+  freeifaddrs(ifaddr);
+  return true;
+}
+
 
 /******************************************************************************
  * RawSendSocket
