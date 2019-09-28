@@ -231,7 +231,14 @@ iw dev ${DEV} set channel 1
 ~~~
 
 # Install wifi configuration scripts
-cp conf/wifi_config /etc
+~~~
+cp conf/wifi_config /etc/default
 cp python/configure_wifi.py /usr/local/bin
 cp services/wifi_config.service /etc/systemd/system
 systemctl enable wifi_config
+
+cp conf/wfb_bridge /etc/default
+cp install/bin/wfb_bridge /usr/local/bin
+sudo cp services/wfb_bridge.service /etc/systemd/system
+sudo cp services/wfb_bridge@.service /etc/systemd/system
+systemctl enable wfb_bridge@air (or @ground)

@@ -151,35 +151,18 @@ double cur_time() {
 
 int main(int argc, const char** argv) {
 
-  std::string log_level;
-  std::string syslog_level;
-  std::string syslog_host;
-  uint16_t max_queue_size;
   po::options_description desc("Allowed options");
   desc.add_options()
     ("help,h", "produce help message")
-    ("log_level,l", po::value<std::string>(&log_level),
-     "the console logging level (debug, info, warning, error, critical)")
-    ("syslog_level,s", po::value<std::string>(&syslog_level),
-     "the syslog logging level (debug, info, warning, error, critical)")
-    ("syslog_host", po::value<std::string>(&syslog_host),
-     "the host to send syslog mnessages to")
-    ("max_queue_size,q", po::value<uint16_t>(&max_queue_size)->default_value(30),
-     "the number of blocks to allow in the queue before dropping")
     ;
 
-  std::string device;
-  std::string mode;
   std::string conf_file;
   po::options_description pos("Positional");
   pos.add_options()
-    ("mode", po::value<std::string>(&mode),
-     "the mode as specified in the configuration file (air/ground)")
     ("conf_file", po::value<std::string>(&conf_file),
      "the path to the configuration file used for configuring ports")
     ;
   po::positional_options_description p;
-  p.add("mode", 1);
   p.add("conf_file", 1);
 
   po::options_description all_options("Allowed options");
@@ -190,24 +173,31 @@ int main(int argc, const char** argv) {
   po::notify(vm);
 
   if (vm.count("help") || !vm.count("conf_file")) {
-    std::cout << "Usage: options_description [options] <mode> <configuration file>\n";
+    std::cout << "Usage: options_description [options] <configuration file>\n";
     std::cout << desc << std::endl;
     return EXIT_SUCCESS;
   }
-
-  // Create the logger
-  Logger::create(log_level, syslog_level, syslog_host);
-  LOG_INFO << "wfb_bridge logging '" << log_level << "' to console and '"
-	   << syslog_level << "' to syslog";
 
   // Parse the configuration file.
   pt::ptree conf;
   try {
     pt::read_ini(conf_file, conf);
   } catch(...) {
-    LOG_CRITICAL << "Error reading the configuration file: " << conf_file;
+    std::cerr << "Error reading the configuration file: " << conf_file;
     return EXIT_FAILURE;
   }
+
+  // Read the global parameters
+  std::string mode = conf.get<std::string>("global.mode", "air");
+  std::string log_level = conf.get<std::string>("global.loglevel", "info");
+  std::string syslog_level = conf.get<std::string>("global.sysloglevel", "info");
+  std::string syslog_host = conf.get<std::string>("global.sysloghost", "localhost");
+  uint16_t max_queue_size = conf.get<uint16_t>("global.max_queue_size", 80);
+
+  // Create the logger
+  Logger::create(log_level, syslog_level, syslog_host);
+  LOG_INFO << "wfb_bridge logging '" << log_level << "' to console and '"
+	   << syslog_level << "' to syslog";
 
   // Create the message queues.
   SharedQueue<std::shared_ptr<monitor_message_t> > inqueue;   // Wifi to UDP
@@ -216,6 +206,11 @@ int main(int argc, const char** argv) {
   // Create the uplink UDP interfaces as specified in the configuration file.
   std::vector<std::shared_ptr<std::thread> > thrs;
   BOOST_FOREACH(const auto &v, conf) {
+
+    // Ignore global options.
+    if (v.first == "global") {
+      continue;
+    }
 
     // Only process uplink configuration entries.
     std::string direction = v.second.get<std::string>("direction", "");
@@ -456,6 +451,11 @@ int main(int argc, const char** argv) {
   // Create the downlink UDP interfaces as specified in the configuration file.
   std::vector<std::shared_ptr<UDPDestination> > udp_out(16);
   BOOST_FOREACH(const auto &v, conf) {
+
+    // Ignore global options.
+    if (v.first == "global") {
+      continue;
+    }
 
     // Only process uplink configuration entries.
     std::string direction = v.second.get<std::string>("direction", "");

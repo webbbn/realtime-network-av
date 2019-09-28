@@ -53,7 +53,7 @@ class Network(object):
         if not isinstance(log_level, int):
             print("Invalid log level: %s - setting to info" % (args.loglevel))
             log_level = logging.INFO
-        logger = logging.getLogger('FPVNG-controller')
+        logger = logging.getLogger('wifi_config')
         logging.basicConfig(level=log_level, format="%(asctime)s %(levelname)s: %(message)s", datefmt="%H:%M:%S", \
                             handlers = [logging.handlers.SysLogHandler(address = "/dev/log")])
 
@@ -202,8 +202,13 @@ class Network(object):
         logging.debug("Configured: %s" % (interface))
         self.m_devices.append(interface)
 
+        # Restart the wfb_bridge service so that it gets the updated inteface
+        self.restart_wfb_config()
+
         return card
 
+    def restart_wfb_config(self):
+        os.system("systemctl restart \"wfb_bridge@*\"")
 
 net = Network()
 net.read_config(config_filename)

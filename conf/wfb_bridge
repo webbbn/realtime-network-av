@@ -1,3 +1,10 @@
+[global]
+mode = air
+loglevel = critical
+sysloglevel = info
+sysloghost = localhost
+maxqueuesize = 80
+
 [video]
 name = Video Downlink
 direction = down

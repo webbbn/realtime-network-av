@@ -1,4 +1,5 @@
 
+#include <thread>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -284,7 +285,7 @@ bool RawReceiveSocket::add_device(const std::string &device) {
   // open the interface in pcap
   char errbuf[PCAP_ERRBUF_SIZE];
   errbuf[0] = '\0';
-  m_ppcap = pcap_open_live(device.c_str(), 2350, 0, -1, errbuf);
+  m_ppcap = pcap_open_live(device.c_str(), 2350, 0, 100, errbuf);
   if (m_ppcap == NULL) {
     m_error_msg = "Unable to open " + device + ": " + std::string(errbuf);
     return false;
@@ -297,8 +298,12 @@ bool RawReceiveSocket::add_device(const std::string &device) {
   }
 */
 
-  if(pcap_setdirection(m_ppcap, PCAP_D_IN) < 0) {
-    m_error_msg = "Error setting " + device + " direction\n";
+  if (pcap_set_timeout(m_ppcap, 30) < 0) {
+    m_error_msg = "Error setting " + device + " timeout";
+    return false;
+  }
+  if (pcap_setdirection(m_ppcap, PCAP_D_IN) < 0) {
+    m_error_msg = "Error setting " + device + " direction";
     return false;
   }
 
@@ -359,8 +364,9 @@ bool RawReceiveSocket::receive(monitor_message_t &msg) {
     if (retval < 0) {
       m_error_msg = "Error receiving from the raw data socket.\n  " +
 	std::string(pcap_geterr(m_ppcap));
-      continue;
+      return false;
     } else if(retval == 0) {
+      //std::this_thread::sleep_for(std::chrono::nanoseconds(1000));
       // Timeout, just continue;
       continue;
     }
