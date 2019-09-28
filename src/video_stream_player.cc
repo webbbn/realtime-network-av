@@ -378,7 +378,7 @@ int main(int argc, char* argv[]) {
       // Create the decode thread.
       std::thread dec_thread(decoder);
 
-      FECDecoder fec(nblocks, nfec_blocks, block_size);
+      //FECDecoder fec(nblocks, nfec_blocks, block_size);
 
       // Pull packets off the message queue.
       bool done = false;
@@ -393,6 +393,7 @@ int main(int argc, char* argv[]) {
 	if ((block_size > 0) && (nblocks > 0) && (nfec_blocks > 0)) {
 
 	  // Add this block to the FEC decoder.
+/*
 	  if (fec.add_block(buf->data.data()) == FECStatus::FEC_COMPLETE) {
 
 	    // Output the data blocks
@@ -408,7 +409,6 @@ int main(int argc, char* argv[]) {
 	      }
 	    }
 	  }
-
 	  double dur = (cur_time() - prev_time);
 	  if (dur > 2.0) {
 	    // Combine all decoder stats.
@@ -421,6 +421,7 @@ int main(int argc, char* argv[]) {
 	    prev_time = cur_time();
 	    prev_stats = stats;
 	  }
+*/
 
 	} else {
 

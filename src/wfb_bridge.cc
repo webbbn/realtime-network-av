@@ -63,7 +63,7 @@ struct Message {
 };
 
 struct UDPDestination {
-  UDPDestination(uint16_t port, const std::string &hostname, std::shared_ptr<FECDecoder2> enc) :
+  UDPDestination(uint16_t port, const std::string &hostname, std::shared_ptr<FECDecoder> enc) :
     fec(enc) {
 
     // Initialize the UDP output socket.
@@ -82,7 +82,7 @@ struct UDPDestination {
     s.sin_addr.s_addr = inet_addr(ip.c_str());
   }
   struct sockaddr_in s;
-  std::shared_ptr<FECDecoder2> fec;
+  std::shared_ptr<FECDecoder> fec;
 };
 
 
@@ -467,10 +467,10 @@ int main(int argc, const char** argv) {
       uint8_t nfec_blocks = v.second.get<uint8_t>("fec", 0);
 
       // Create the FEC encoder if requested.
-      std::shared_ptr<FECDecoder2> enc;
+      std::shared_ptr<FECDecoder> enc;
       LinkType link_type = DATA_LINK;
       if ((type == "data") && (nblocks > 0) && (nfec_blocks > 0) && (blocksize > 0)) {
-	enc.reset(new FECDecoder2());
+	enc.reset(new FECDecoder());
 	link_type = DATA_LINK;
       } else if (type == "short") {
 	link_type = SHORT_DATA_LINK;
@@ -507,7 +507,7 @@ int main(int argc, const char** argv) {
 
     // Is the packet FEC encoded?
     if (udp_out[buf->port]->fec) {
-      std::shared_ptr<FECDecoder2> fec = udp_out[buf->port]->fec;
+      std::shared_ptr<FECDecoder> fec = udp_out[buf->port]->fec;
 
       // Add this block to the FEC decoder.
       fec->add_block(buf->data.data(), buf->data.size());

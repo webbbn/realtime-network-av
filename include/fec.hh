@@ -132,60 +132,12 @@ public:
     return m_out_blocks.size();
   }
 
-  void encode(const uint8_t *buf, size_t buf_len);
-
-  std::vector<uint8_t*> &blocks() {
-    return m_block_ptrs;
-  }
-
-  uint8_t num_blocks() const {
-    return m_num_blocks;
-  }
-
-  uint8_t num_fec_blocks() const {
-    return m_num_fec_blocks;
-  }
-
-  uint16_t max_block_size() const {
-    return m_max_block_size;
-  }
-
-  const uint8_t *block(uint8_t idx) const {
-    return m_data_blocks[idx] - 4;
-  }
-
-  uint8_t *block(uint8_t idx) {
-    return m_data_blocks[idx] - 4;
-  }
-
-  uint16_t block_len(uint8_t idx) {
-    return ((uint16_t*)m_data_blocks[idx])[0];
-  }
-
-  const uint8_t *fec_block(uint8_t idx) const {
-    return m_fec_blocks[idx] - 4;
-  }
-
-  uint8_t *fec_block(uint8_t idx) {
-    return m_fec_blocks[idx] - 4;
-  }
-
-  uint16_t fec_block_len(uint8_t idx) {
-    return ((uint16_t*)m_fec_blocks[idx])[0];
-  }
-
 private:
+  uint8_t m_seq_num;
   uint8_t m_num_blocks;
   uint8_t m_num_fec_blocks;
-  uint16_t m_max_block_size;
-  uint16_t m_seq_num;
-  std::vector<uint16_t> m_block_sizes;
-  std::vector<uint8_t> m_buf;
-  std::vector<uint8_t*> m_data_blocks;
-  std::vector<uint8_t*> m_fec_blocks;
-  std::vector<uint8_t*> m_block_ptrs;
- std::vector<std::shared_ptr<FECBlock> > m_in_blocks;
- std::queue<std::shared_ptr<FECBlock> > m_out_blocks;
+  std::vector<std::shared_ptr<FECBlock> > m_in_blocks;
+  std::queue<std::shared_ptr<FECBlock> > m_out_blocks;
 
   void encode_blocks();
 };
@@ -204,53 +156,7 @@ struct FECDecoderStats {
 class FECDecoder {
 public:
 
-  FECDecoder(uint8_t num_blocks = 8, uint8_t num_fec_blocks = 4, uint16_t block_size = 1500);
-
-  uint8_t num_blocks() const {
-    return m_num_blocks;
-  }
-
-  uint8_t num_fec_blocks() const {
-    return m_num_fec_blocks;
-  }
-
-  uint16_t block_size() const {
-    return m_block_size;
-  }
-
-  std::vector<uint8_t*> &blocks() {
-    return m_block_ptrs;
-  }
-
-  FECStatus add_block(const uint8_t *buf);
-
-  const FECDecoderStats &stats() const {
-    return m_stats;
-  }
-
-private:
-  uint8_t m_num_blocks;
-  uint8_t m_num_fec_blocks;
-  uint16_t m_block_size;
-  uint32_t m_packet_num;
-  uint32_t m_prev_seq_num;
-  uint8_t m_bad_seq_count;
-  std::vector<uint8_t> m_buf;
-
-  std::vector<uint8_t*> m_block_ptrs;
-  std::vector<uint8_t*> m_fec_ptrs;
-  std::set<uint8_t> m_set_blocks;
-  FECDecoderStats m_stats;
-
-  void reset(uint32_t pn);
-
-  bool decode();
-};
-
-class FECDecoder2 {
-public:
-
-  FECDecoder2();
+  FECDecoder();
 
   void add_block(const uint8_t *buf, uint16_t block_length);
 
