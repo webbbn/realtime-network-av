@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <unistd.h>
 #include <sys/socket.h>
+#include <sys/types.h>
 #include <netinet/ether.h>
 #include <netpacket/packet.h>
 #include <net/if.h>
@@ -11,6 +12,7 @@
 #include <arpa/inet.h>
 #include <sys/time.h>
 #include <time.h>
+#include <ifaddrs.h>
 
 #include <iostream>
 #include <string>
@@ -85,6 +87,30 @@ struct UDPDestination {
   std::shared_ptr<FECDecoder> fec;
 };
 
+bool get_net_devices(std::vector<std::string> &ifnames) {
+  ifnames.clear();
+
+  // Get the wifi interfaces.
+  struct ifaddrs *ifaddr;
+  if (getifaddrs(&ifaddr) == -1) {
+    return false;
+  }
+
+  // Create the list of interface names.
+  struct ifaddrs *ifa;
+  for (ifa = ifaddr; ifa != NULL; ifa = ifa->ifa_next) {
+    if (ifa->ifa_addr == NULL) {
+      continue;
+    }
+    // Only return AF_PACKET interfaces
+    if (ifa->ifa_addr->sa_family == AF_PACKET) {
+      ifnames.push_back(ifa->ifa_name);
+    }
+  }
+
+  freeifaddrs(ifaddr);
+  return true;
+}
 
 std::string hostname_to_ip(const std::string &hostname) {
 
@@ -163,14 +189,12 @@ int main(int argc, const char** argv) {
   std::string conf_file;
   po::options_description pos("Positional");
   pos.add_options()
-    ("device", po::value<std::string>(&device), "the wifi device to use")
     ("mode", po::value<std::string>(&mode),
      "the mode as specified in the configuration file (air/ground)")
     ("conf_file", po::value<std::string>(&conf_file),
      "the path to the configuration file used for configuring ports")
     ;
   po::positional_options_description p;
-  p.add("device", 1);
   p.add("mode", 1);
   p.add("conf_file", 1);
 
@@ -182,7 +206,7 @@ int main(int argc, const char** argv) {
   po::notify(vm);
 
   if (vm.count("help") || !vm.count("conf_file")) {
-    std::cout << "Usage: options_description [options] <device> <mode> <configuration file>\n";
+    std::cout << "Usage: options_description [options] <mode> <configuration file>\n";
     std::cout << desc;
     return EXIT_SUCCESS;
   }
@@ -283,11 +307,25 @@ int main(int argc, const char** argv) {
     }    
   }
 
+  // Get a list of the network devices.
+  std::vector<std::string> ifnames;
+  if (!get_net_devices(ifnames)) {
+    std::cerr << "Error reading the network interfaces.";
+  }
+
   // Open the raw transmit socket
   RawSendSocket raw_send_sock((mode == "ground"));
-  if (!raw_send_sock.add_device(device)) {
+  // Connect to the raw wifi interfaces.
+  bool valid_send_sock = false;
+  for (const auto &device : ifnames) {
+    if (raw_send_sock.add_device(device)) {
+      valid_send_sock = true;
+      std::cerr << "Transmitting on interface: " << device << std::endl;
+      break;
+    }
+  }
+  if (!valid_send_sock) {
     std::cerr << "Error opeing the raw socket for transmiting.\n";
-    std::cerr << "  " << raw_send_sock.error_msg() << std::endl;
     return EXIT_FAILURE;
   }
 
@@ -367,10 +405,13 @@ int main(int argc, const char** argv) {
 
   // Open the raw receive socket
   RawReceiveSocket raw_recv_sock((mode == "ground"));
-  if (!raw_recv_sock.add_device(device)) {
-    std::cerr << "Error opeing the raw socket for transmiting.\n";
-    std::cerr << "  " << raw_recv_sock.error_msg() << std::endl;
-    return EXIT_FAILURE;
+  bool valid_recv_sock = false;
+  for (const auto &device : ifnames) {
+    if (raw_recv_sock.add_device(device)) {
+      valid_recv_sock = true;
+      std::cerr << "Receiving on interface: " << device << std::endl;
+      break;
+    }
   }
 
   // Create the raw socket receive thread
