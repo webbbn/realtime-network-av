@@ -33,6 +33,7 @@
 
 #include <boost/date_time/posix_time/posix_time.hpp>
 
+#include <logging.hh>
 #include <stats_accumulator.hh>
 #include <shared_queue.hh>
 #include <raw_socket.hh>
@@ -40,6 +41,8 @@
 
 namespace po=boost::program_options;
 namespace pt=boost::property_tree;
+
+Logger::LoggerP Logger::g_logger;
 
 std::string hostname_to_ip(const std::string &hostname);
 
@@ -117,7 +120,7 @@ std::string hostname_to_ip(const std::string &hostname) {
   // Try to lookup the host.
   struct hostent *he;
   if ((he = gethostbyname(hostname.c_str())) == NULL) {
-    std::cerr << "Error: invalid hostname\n";
+    LOG_ERROR << "Error: invalid hostname";
     return "";
   }
 
@@ -135,7 +138,7 @@ int open_udp_socket_for_rx(uint16_t port, const std::string hostname = "") {
   // Try to open a UDP socket.
   int fd = socket(AF_INET, SOCK_DGRAM, 0);
   if (fd < 0) {
-    std::cerr << "Error opening the UDP receive socket.\n";
+    LOG_ERROR << "Error opening the UDP receive socket.";
     return -1;
   }
 
@@ -159,7 +162,7 @@ int open_udp_socket_for_rx(uint16_t port, const std::string hostname = "") {
   }
 
   if (bind(fd, (struct sockaddr *)&saddr, sizeof(saddr)) < 0) {
-    std::cerr << "Error binding to the UDP receive socket: " << port << std::endl;
+    LOG_ERROR << "Error binding to the UDP receive socket: " << port;
     return -1;
   }
 
@@ -174,14 +177,21 @@ double cur_time() {
 
 int main(int argc, const char** argv) {
 
+  std::string log_level;
+  std::string syslog_level;
+  std::string syslog_host;
   uint16_t max_queue_size;
-  bool csv;
   po::options_description desc("Allowed options");
   desc.add_options()
     ("help,h", "produce help message")
+    ("log_level,l", po::value<std::string>(&log_level),
+     "the console logging level (debug, info, warning, error, critical)")
+    ("syslog_level,s", po::value<std::string>(&syslog_level),
+     "the syslog logging level (debug, info, warning, error, critical)")
+    ("syslog_host", po::value<std::string>(&syslog_host),
+     "the host to send syslog mnessages to")
     ("max_queue_size,q", po::value<uint16_t>(&max_queue_size)->default_value(30),
      "the number of blocks to allow in the queue before dropping")
-    ("csv,c", po::bool_switch(&csv), "output CSV log messages")
     ;
 
   std::string device;
@@ -207,16 +217,21 @@ int main(int argc, const char** argv) {
 
   if (vm.count("help") || !vm.count("conf_file")) {
     std::cout << "Usage: options_description [options] <mode> <configuration file>\n";
-    std::cout << desc;
+    std::cout << desc << std::endl;
     return EXIT_SUCCESS;
   }
+
+  // Create the logger
+  Logger::create(log_level, syslog_level, syslog_host);
+  LOG_INFO << "wfb_bridge logging '" << log_level << "' to console and '"
+	   << syslog_level << "' to syslog";
 
   // Parse the configuration file.
   pt::ptree conf;
   try {
     pt::read_ini(conf_file, conf);
   } catch(...) {
-    std::cerr << "Error reading the configuration file: " << conf_file << std::endl;
+    LOG_CRITICAL << "Error reading the configuration file: " << conf_file;
     return EXIT_FAILURE;
   }
 
@@ -239,7 +254,7 @@ int main(int argc, const char** argv) {
       // Get the UDP port number (required).
       uint16_t inport = v.second.get<uint16_t>("inport", 0);
       if (inport == 0) {
-	std::cerr << "No inport specified for " << name << std::endl;
+	LOG_CRITICAL << "No inport specified for " << name;
 	return EXIT_FAILURE;
       }
 
@@ -249,7 +264,7 @@ int main(int argc, const char** argv) {
       // Get the port number (required).
       uint8_t port = v.second.get<uint16_t>("port", 0);
       if (port == 0) {
-	std::cerr << "No port specified for " << name << std::endl;
+	LOG_CRITICAL << "No port specified for " << name;
 	return EXIT_FAILURE;
       }
 
@@ -286,8 +301,8 @@ int main(int argc, const char** argv) {
       // Try to open the UDP socket.
       int udp_sock = open_udp_socket_for_rx(inport, hostname);
       if (udp_sock < 0) {
-	std::cerr << "Error opening the UDP socket for " << name << "  ("
-		  << hostname << ":" << port << std::endl;
+	LOG_CRITICAL << "Error opening the UDP socket for " << name << "  ("
+		  << hostname << ":" << port;
 	return EXIT_FAILURE;
       }
 
@@ -310,7 +325,7 @@ int main(int argc, const char** argv) {
   // Get a list of the network devices.
   std::vector<std::string> ifnames;
   if (!get_net_devices(ifnames)) {
-    std::cerr << "Error reading the network interfaces.";
+    LOG_CRITICAL << "Error reading the network interfaces.";
   }
 
   // Open the raw transmit socket
@@ -320,17 +335,17 @@ int main(int argc, const char** argv) {
   for (const auto &device : ifnames) {
     if (raw_send_sock.add_device(device)) {
       valid_send_sock = true;
-      std::cerr << "Transmitting on interface: " << device << std::endl;
+      LOG_INFO << "Transmitting on interface: " << device;
       break;
     }
   }
   if (!valid_send_sock) {
-    std::cerr << "Error opeing the raw socket for transmiting.\n";
+    LOG_CRITICAL << "Error opeing the raw socket for transmiting.";
     return EXIT_FAILURE;
   }
 
   // Create a thread to send raw socket packets.
-  auto send_th = [&outqueue, &raw_send_sock, csv, max_queue_size]() {
+  auto send_th = [&outqueue, &raw_send_sock, max_queue_size]() {
     double start = cur_time();
     double cur = 0;
     double enc_time = 0;
@@ -385,17 +400,13 @@ int main(int argc, const char** argv) {
       double dur = cur - start;
       loop_time += (cur - loop_start);
       if (dur > 2.0) {
-	if (csv) {
-	  std::cout << pkts << "," << count << "," << dropped_blocks << "," << max_pkt << std::endl;
-	} else {
-	  std::cerr << "Packets/sec: " << int(nblocks / dur)
-		    << " Mbps: " << 8e-6 * count / dur
-		    << " Dropped: " << dropped_blocks
-		    << " Max packet: " << max_pkt
-		    << " Encode ms: " << 1e+3 * enc_time
-		    << " Send ms: " << 1e+3 * send_time
-		    << " Loop time ms: " << 1e3 * loop_time << std::endl;
-	}
+	LOG_INFO << "Packets/sec: " << int(nblocks / dur)
+		 << " Mbps: " << 8e-6 * count / dur
+		 << " Dropped: " << dropped_blocks
+		 << " Max packet: " << max_pkt
+		 << " Encode ms: " << 1e+3 * enc_time
+		 << " Send ms: " << 1e+3 * send_time
+		 << " Loop time ms: " << 1e3 * loop_time;
 	start = cur;
 	count = pkts = nblocks =  max_pkt = enc_time = send_time = loop_time = dropped_blocks = 0;
       }
@@ -409,7 +420,7 @@ int main(int argc, const char** argv) {
   for (const auto &device : ifnames) {
     if (raw_recv_sock.add_device(device)) {
       valid_recv_sock = true;
-      std::cerr << "Receiving on interface: " << device << std::endl;
+      LOG_INFO << "Receiving on interface: " << device;
       break;
     }
   }
@@ -433,7 +444,7 @@ int main(int argc, const char** argv) {
 	  if (prev_stats.packets == 0) {
 	    prev_stats = stats;
 	  }
-	  std::cerr
+	  LOG_INFO
 	    << "Packets: " << stats.packets - prev_stats.packets << " (D:"
 	    << stats.dropped_packets - prev_stats.dropped_packets << " E:"
 	    << stats.error_packets - prev_stats.error_packets
@@ -443,12 +454,13 @@ int main(int argc, const char** argv) {
 	    << " Mbps)  Resets: " << stats.resets << "-" << stats.resets - prev_stats.resets
 	    << "  RSSI: " << static_cast<int16_t>(rint(rssi_stats.mean())) << " ("
 	    << static_cast<int16_t>(rssi_stats.min()) << "/"
-	    << static_cast<int16_t>(rssi_stats.max()) << ")\n";
+	    << static_cast<int16_t>(rssi_stats.max()) << ")";
 	  prev_stats = stats;
 	  rssi_stats.reset();
 	}
       } else {
-	std::cerr << "Error receiving packet.\n" << raw_recv_sock.error_msg() << std::endl;
+	LOG_ERROR << "Error receiving packet.";
+	LOG_ERROR << raw_recv_sock.error_msg();
       }
     }
   };
@@ -457,12 +469,12 @@ int main(int argc, const char** argv) {
   // Open the UDP send socket
   int send_sock = socket(AF_INET, SOCK_DGRAM, 0);
   if (send_sock < 0) {
-    std::cerr << "Error opening the UDP send socket.\n";
+    LOG_CRITICAL << "Error opening the UDP send socket.";
     return EXIT_FAILURE;
   }
   int trueflag = 1;
   if (setsockopt(send_sock, SOL_SOCKET, SO_BROADCAST, &trueflag, sizeof(trueflag)) < 0) {
-    std::cerr << "Error setting the UDP send socket to broadcast.\n";
+    LOG_CRITICAL << "Error setting the UDP send socket to broadcast.";
     return EXIT_FAILURE;
   }
 
@@ -481,7 +493,7 @@ int main(int argc, const char** argv) {
       // Get the UDP port number (required).
       uint16_t outport = v.second.get<uint16_t>("outport", 0);
       if (outport == 0) {
-	std::cerr << "No outport specified for " << name << std::endl;
+	LOG_CRITICAL << "No outport specified for " << name;
 	return EXIT_FAILURE;
       }
 
@@ -491,11 +503,11 @@ int main(int argc, const char** argv) {
       // Get the port number (required).
       uint8_t port = v.second.get<uint16_t>("port", 0);
       if (port == 0) {
-	std::cerr << "No port specified for " << name << std::endl;
+	LOG_CRITICAL << "No port specified for " << name;
 	return EXIT_FAILURE;
       }
       if (port > 15) {
-	std::cerr << "Invalid port specified for " << name << "  (" << port << ")" << std::endl;
+	LOG_CRITICAL << "Invalid port specified for " << name << "  (" << port << ")";
 	return EXIT_FAILURE;
       }
 
@@ -542,7 +554,7 @@ int main(int argc, const char** argv) {
 
     // Lookup the destination class.
     if (!udp_out[buf->port]) {
-      std::cerr << "Error finding the output destination for port " << buf->port << std::endl;
+      LOG_ERROR << "Error finding the output destination for port " << buf->port;
       continue;
     }
 

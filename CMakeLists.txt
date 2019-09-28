@@ -95,7 +95,8 @@ link_directories("${PROJECT_SOURCE_DIR}/modules/rtaudio")
 find_package(Boost REQUIRED COMPONENTS
   program_options
   system
-  filesystem)
+  filesystem
+  log)
 include_directories(${Boost_INCLUDE_DIR})
 
 # Build the udp_audio server
@@ -171,7 +172,7 @@ if (OPENMAXIL_LIBRARY)
   install(TARGETS rpi_video_player DESTINATION bin COMPONENT applications)
 endif ()
 
-add_executable(wfb_bridge src/wfb_bridge.cc src/raw_socket.cc src/fec.c src/fec.cc src/radiotap.c)
+add_executable(wfb_bridge src/wfb_bridge.cc src/raw_socket.cc src/fec.c src/fec.cc src/radiotap.c src/logging.cc)
 install(TARGETS wfb_bridge DESTINATION bin COMPONENT applications)
 target_link_libraries(wfb_bridge ${Boost_LIBRARIES} pcap pthread)
 
