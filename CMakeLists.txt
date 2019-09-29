@@ -198,9 +198,14 @@ install(FILES "${PROJECT_SOURCE_DIR}/fonts/Cousine-Italic.ttf" DESTINATION fonts
 install(FILES "${PROJECT_SOURCE_DIR}/fonts/Cousine-Regular.ttf" DESTINATION fonts COMPONENT fonts)
 
 # Install the configuration files
-install(FILES "${PROJECT_SOURCE_DIR}/conf/wifi_bridge_ground.json" DESTINATION conf COMPONENT configuratios)
-install(FILES "${PROJECT_SOURCE_DIR}/conf/wifi_bridge_air.json" DESTINATION conf COMPONENT configuratios)
-install(FILES "${PROJECT_SOURCE_DIR}/conf/wfb_bridge" DESTINATION conf COMPONENT configuratios)
+install(FILES "${PROJECT_SOURCE_DIR}/conf/wifi_config" DESTINATION etc/default COMPONENT configuratios)
+install(FILES "${PROJECT_SOURCE_DIR}/conf/wfb_bridge" DESTINATION etc/default COMPONENT configuratios)
+install(FILES "${PROJECT_SOURCE_DIR}/conf/fpvng_controller" DESTINATION etc/default COMPONENT configuratios)
+
+# Install the configuration files
+install(FILES "${PROJECT_SOURCE_DIR}/services/wifi_config.service" DESTINATION etc/systemd/system COMPONENT configuratios)
+install(FILES "${PROJECT_SOURCE_DIR}/services/wfb_bridge.service" DESTINATION etc/systemd/system COMPONENT configuratios)
+install(FILES "${PROJECT_SOURCE_DIR}/services/fpvng_controller.service" DESTINATION etc/systemd/system COMPONENT configuratios)
 
 # Create a windows installer
 if (WIN32)

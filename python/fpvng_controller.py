@@ -37,43 +37,50 @@ import queue
 import argparse
 import signal
 import logging
+import logging.handlers
+import configparser
 import multiprocessing as mp
 
 import camera
 import rx_process as rx
 import telemetry
 
+config_filename = os.path.join(root_dir, "etc/default/fpvnv_controller")
+
 # Define an exit handler to do a graceful shutdown
 def exit_handler(sig, frame):
     sys.exit()
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument("-l", "--loglevel", default="info", \
-                        help="set output logging level (debug, info, warning, error, critical)")
-    parser.add_argument("-vh", "--video_height", default=1280, \
-                        help="the desired video frame height")
-    parser.add_argument("-vw", "--video_width", default=2560, \
-                        help="the desired video frame width")
 
-    # Parse the options
-    args = parser.parse_args()
-    height = int(args.video_height)
-    width = int(args.video_width)
+    # Read the config file
+    config = configparser.ConfigParser()
+    config['global'] = {
+        'loglevel': 'error',
+        'video_width': 2560,
+        'video_height': 1280
+    }
+    try:
+        config.read(config_filename)
+    except:
+        print("Error reading the configuration file: " + config_filename)
+        exit
 
     # Configure the logger
-    log_level = getattr(logging, args.loglevel.upper())
+    log_level = getattr(logging, config['global'].get('loglevel').upper())
     if not isinstance(log_level, int):
         print("Invalid log level: %s - setting to info" % (args.loglevel))
         log_level = logging.INFO
-    logger = logging.getLogger('FPVNG-controller')
-    logging.basicConfig(level=log_level, format="%(asctime)s %(levelname)s: %(message)s", datefmt="%H:%M:%S")
+    logger = logging.getLogger('fpvng_controller')
+    logging.basicConfig(level=log_level, format="%(asctime)s %(levelname)s: %(message)s", datefmt="%H:%M:%S",
+                        handlers = [logging.handlers.SysLogHandler(address = "/dev/log")])
 
     # Setup an exit handler to gracefully exit
     signal.signal(signal.SIGINT, exit_handler)
 
     # Try to start the camera
-    cam = camera.CameraProcess(width = width, height = height)
+    cam = camera.CameraProcess(width = int(config['global'].get('video_width')),
+                               height = int(config['global'].get('video_height')))
     if cam.start():
         air_side = True
         logging.info("Camera found. Running as Air side.")

@@ -1,0 +1,4 @@
+[global]
+loglevel = error
+video_width = 2560
+video_height = 1280
