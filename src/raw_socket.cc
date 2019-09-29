@@ -1,4 +1,5 @@
 
+#include <algorithm>
 #include <thread>
 #include <stdlib.h>
 #include <stdio.h>
@@ -376,6 +377,8 @@ bool RawReceiveSocket::receive(monitor_message_t &msg) {
     return false;
   }
 
+  msg.antennas.clear();
+  msg.rssis.clear();
   int n;
   while ((n = ieee80211_radiotap_iterator_next(&rti)) == 0) {
     switch (rti.this_arg_index) {
@@ -387,15 +390,22 @@ bool RawReceiveSocket::receive(monitor_message_t &msg) {
       msg.channel_flag = *((uint16_t *)(rti.this_arg + 2));
       break;
     case IEEE80211_RADIOTAP_ANTENNA:
-      msg.antenna = (*rti.this_arg) + 1;
+      msg.antennas.push_back(*reinterpret_cast<uint8_t*>(rti.this_arg));
       break;
     case IEEE80211_RADIOTAP_FLAGS:
       msg.radiotap_flags = *rti.this_arg;
       break;
     case IEEE80211_RADIOTAP_DBM_ANTSIGNAL:
-      msg.rssi = (int8_t)(*rti.this_arg);
+      msg.rssis.push_back(*reinterpret_cast<int8_t*>(rti.this_arg));
       break;
     }
+  }
+
+  // Determine the best RSSI value
+  if (msg.rssis.empty()) {
+    msg.rssi = -100;
+  } else {
+    msg.rssi = *std::max_element(msg.rssis.begin(), msg.rssis.end());
   }
 
   // Copy the data into the message buffer.
