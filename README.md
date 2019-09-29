@@ -12,6 +12,7 @@ git submodule update --init --recursive
 
 ~~~
 sudo apt-get install cmake libasound2-dev libboost-all-dev libavcodec-dev libavformat-dev libswscale-dev libssl-dev cython3 libv4l-dev libpcap-dev libsqlite3-dev python3-pip python3-numpy python-future python-lxml python3-future python3-lxml python3-setuptools python3-serial python3-wheel python3-pyudev
+sudo apt-get purge network-manager
 sudo -H pip3 install pymavlink pyric
 ~~~
 
@@ -87,8 +88,10 @@ sudo apt-get install libsdl2-dev libsdl2-image-dev libsdl2-ttf-dev libsdl2-gfx-d
 
 # Compile the code
 
+mkdir build
+cd build
 cmake -DCMAKE_PREFIX_PATH=`realpath \`pwd\``/sdl -DCMAKE_INSTALL_PREFIX=`realpath \`pwd\`/..`/install ..
-make -j 4 install
+make install
 
 # Build v4l2rtspserver
 
@@ -232,13 +235,12 @@ iw dev ${DEV} set channel 1
 
 # Install wifi configuration scripts
 ~~~
-cp conf/wifi_config /etc/default
-cp python/configure_wifi.py /usr/local/bin
-cp services/wifi_config.service /etc/systemd/system
-systemctl enable wifi_config
+sudo cp ../conf/wifi_config /etc/default
+sudo cp ../python/configure_wifi.py /usr/local/bin
+sudo cp ../services/wifi_config.service /etc/systemd/system
+sudo systemctl enable wifi_config
 
-cp conf/wfb_bridge /etc/default
-cp install/bin/wfb_bridge /usr/local/bin
-sudo cp services/wfb_bridge.service /etc/systemd/system
-sudo cp services/wfb_bridge@.service /etc/systemd/system
-systemctl enable wfb_bridge@air (or @ground)
+sudo cp ../conf/wfb_bridge /etc/default
+sudo cp ../install/bin/wfb_bridge /usr/local/bin
+sudo cp ../services/wfb_bridge.service /etc/systemd/system
+sudo systemctl enable wfb_bridge

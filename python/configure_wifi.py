@@ -17,7 +17,7 @@ class Card(enum.Enum):
     ath9k = 1
     rtl88xx = 2
 
-config_filename = "/etc/wifi_config"
+config_filename = "/etc/default/wifi_config"
 
 udev_context = udev.Context()
 
@@ -144,8 +144,10 @@ class Network(object):
         # This is not supported by pyric, so we have to do it manually.
         if bitrate != 0 and type == Card.ath9k:
             try:
+                logging.debug("aab")
                 pyw.down(card)
-                pyw.modeset(card, 'managed', flags='other bss')
+                logging.debug("aac")
+                pyw.modeset(card, 'monitor', flags=['other bss'])
                 pyw.up(card)
                 logging.debug("Setting the bitrate on interface " + interface + " to " + str(bitrate))
                 if os.system("iw dev " + card.dev + " set bitrates legacy-2.4 " + str(bitrate)) != 0:
@@ -169,7 +171,7 @@ class Network(object):
         try:
             pyw.txset(card, txpower, 'fixed')
         except pyric.error as e:
-            pass
+            os.system("iw dev " + card.dev + " set txpower fixed " + str(txpower))
 
         # Bring the interface up
         try:
@@ -202,13 +204,7 @@ class Network(object):
         logging.debug("Configured: %s" % (interface))
         self.m_devices.append(interface)
 
-        # Restart the wfb_bridge service so that it gets the updated inteface
-        self.restart_wfb_config()
-
         return card
-
-    def restart_wfb_config(self):
-        os.system("systemctl restart \"wfb_bridge@*\"")
 
 net = Network()
 net.read_config(config_filename)
