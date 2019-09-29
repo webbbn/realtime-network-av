@@ -236,7 +236,7 @@ int main(int argc, const char** argv) {
   try {
     pt::read_ini(conf_file, conf);
   } catch(...) {
-    std::cerr << "Error reading the configuration file: " << conf_file;
+    std::cerr << "Error reading the configuration file: " << conf_file << std::endl;;
     return EXIT_FAILURE;
   }
 
