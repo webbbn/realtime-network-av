@@ -291,17 +291,6 @@ bool RawReceiveSocket::add_device(const std::string &device) {
     return false;
   }
 
-/*
-  if(pcap_setnonblock(interface->ppcap, 1, errbuf) < 0) {
-    std::cerr << "Error setting " << device << " to nonblocking mode: " << errbuf << std::endl;
-    return false;
-  }
-*/
-
-  if (pcap_set_timeout(m_ppcap, 30) < 0) {
-    m_error_msg = "Error setting " + device + " timeout";
-    return false;
-  }
   if (pcap_setdirection(m_ppcap, PCAP_D_IN) < 0) {
     m_error_msg = "Error setting " + device + " direction";
     return false;
@@ -342,23 +331,6 @@ bool RawReceiveSocket::receive(monitor_message_t &msg) {
 
   while (1) {
 
-/*
-    // Wait until a packet is available.
-    fd_set readset;
-    struct timeval to;
-    to.tv_sec = 0;
-    to.tv_usec = 1e5; // 100ms
-    //to.tv_usec = 1e3; // 1ms
-    FD_ZERO(&readset);
-    FD_SET(interface.selectable_fd, &readset);
-    if(select(30, &readset, NULL, NULL, &to) == 0) {
-      continue;
-    }
-    if(!FD_ISSET(interface.selectable_fd, &readset)) {
-      continue;
-    }
-*/
-
     // Recieve the next packet
     int retval = pcap_next_ex(m_ppcap, &pcap_packet_header, &pcap_packet_data);
     if (retval < 0) {
@@ -366,7 +338,6 @@ bool RawReceiveSocket::receive(monitor_message_t &msg) {
 	std::string(pcap_geterr(m_ppcap));
       return false;
     } else if(retval == 0) {
-      //std::this_thread::sleep_for(std::chrono::nanoseconds(1000));
       // Timeout, just continue;
       continue;
     }

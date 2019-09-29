@@ -56,6 +56,7 @@ struct WifiOptions {
 };
 
 struct Message {
+  Message() : port(0), priority(0) {}
   Message(size_t max_packet, uint8_t p, uint8_t pri, WifiOptions opt,
 	  std::shared_ptr<FECEncoder> e) :
     msg(max_packet), port(p), priority(pri), opts(opt), enc(e) { }
@@ -149,6 +150,58 @@ double cur_time() {
   return double(t.tv_sec) + double(t.tv_usec) * 1e-6;
 }
 
+
+// Retrieve messages from incoming raw socket queue and send the UDP packets.
+void udp_send_loop(SharedQueue<std::shared_ptr<monitor_message_t> > &inqueue,
+		   const std::vector<std::shared_ptr<UDPDestination> > &udp_out,
+		   int send_sock) {
+  double prev_time = cur_time();
+  FECDecoderStats prev_stats;
+  while (1) {
+
+    // Ralink and Atheros both always supply the FCS to userspace, no need to check
+    //if (prd.m_nRadiotapFlags & IEEE80211_RADIOTAP_F_FCS)
+    //bytes -= 4;
+
+    //rx_status->adapter[adapter_no].received_packet_cnt++;
+    //	rx_status->adapter[adapter_no].last_update = dbm_ts_now[adapter_no];
+    //	fprintf(stderr,"lu[%d]: %lld\n",adapter_no,rx_status->adapter[adapter_no].last_update);
+    //	rx_status->adapter[adapter_no].last_update = current_timestamp();
+
+    // Pull the next block off the message queue.
+    std::shared_ptr<monitor_message_t> buf = inqueue.pop();
+
+    // Lookup the destination class.
+    if (!udp_out[buf->port]) {
+      LOG_ERROR << "Error finding the output destination for port " << int(buf->port);
+      continue;
+    }
+
+    // Is the packet FEC encoded?
+    if (udp_out[buf->port]->fec) {
+      std::shared_ptr<FECDecoder> fec = udp_out[buf->port]->fec;
+
+      // Add this block to the FEC decoder.
+      fec->add_block(buf->data.data(), buf->data.size());
+
+      // Output any packets that are finished in the decoder.
+      for (std::shared_ptr<FECBlock> block = fec->get_block(); block; block = fec->get_block()) {
+	if (block->data_length() > 0) {
+	  sendto(send_sock, block->data(), block->data_length(), 0,
+		 (struct sockaddr *)&(udp_out[buf->port]->s), sizeof(struct sockaddr_in));
+	}
+      }
+
+    } else {
+
+      // Just relay the packet if we're not FEC decoding.
+      sendto(send_sock, buf->data.data(), buf->data.size(), 0,
+	     (struct sockaddr *)&(udp_out[buf->port]->s), sizeof(struct sockaddr_in));
+    }
+  }
+}
+
+
 int main(int argc, const char** argv) {
 
   po::options_description desc("Allowed options");
@@ -203,7 +256,8 @@ int main(int argc, const char** argv) {
   SharedQueue<std::shared_ptr<monitor_message_t> > inqueue;   // Wifi to UDP
   SharedQueue<std::shared_ptr<Message> > outqueue;  // UDP to Wifi
 
-  // Create the uplink UDP interfaces as specified in the configuration file.
+  // Create the the threads for receiving blocks off the UDP sockets
+  // and relaying them to the raw socket interface.
   std::vector<std::shared_ptr<std::thread> > thrs;
   BOOST_FOREACH(const auto &v, conf) {
 
@@ -285,156 +339,16 @@ int main(int argc, const char** argv) {
 		       msg->msg.resize(count);
 		       outqueue.push(msg);
 		     }
+		     // If the link goes down the output queue could fill up forever.
+		     // Make sure that doesn't happen.
+		     while (outqueue.size() > 100000) {
+		       outqueue.pop();
+		     }
 		   }
 		 };
       thrs.push_back(std::shared_ptr<std::thread>(new std::thread(uth)));
     }    
   }
-
-  // Get a list of the network devices.
-  std::vector<std::string> ifnames;
-  if (!detect_network_devices(ifnames)) {
-    LOG_CRITICAL << "Error reading the network interfaces.";
-    return EXIT_FAILURE;
-  }
-
-  // Open the raw transmit socket
-  RawSendSocket raw_send_sock((mode == "ground"));
-  // Connect to the raw wifi interfaces.
-  bool valid_send_sock = false;
-  for (const auto &device : ifnames) {
-    if (raw_send_sock.add_device(device)) {
-      valid_send_sock = true;
-      LOG_INFO << "Transmitting on interface: " << device;
-      break;
-    }
-  }
-  if (!valid_send_sock) {
-    LOG_CRITICAL << "Error opeing the raw socket for transmiting.";
-    return EXIT_FAILURE;
-  }
-
-  // Create a thread to send raw socket packets.
-  auto send_th = [&outqueue, &raw_send_sock, max_queue_size]() {
-    double start = cur_time();
-    double cur = 0;
-    double enc_time = 0;
-    double send_time = 0;
-    double loop_time = 0;
-    size_t count = 0;
-    size_t pkts = 0;
-    size_t nblocks = 0;
-    size_t max_pkt = 0;
-    size_t dropped_blocks = 0;
-
-    // Send message out of the send queue
-    while(1) {
-
-      // Pull the next packet off the queue
-      std::shared_ptr<Message> msg = outqueue.pop();
-      double loop_start = cur_time();
-
-      // FEC encode the packet if requested.
-      if (msg->enc) {
-	auto dec = msg->enc;
-	// Get a FEC encoder block
-	std::shared_ptr<FECBlock> block = dec->get_next_block(msg->msg.size());
-	// Copy the data into the block
-	std::copy(msg->msg.data(), msg->msg.data() + msg->msg.size(), block->data());
-	// Pass it off to the FEC encoder.
-	dec->add_block(block);
-	enc_time += (cur_time() - loop_start);
-	max_pkt = std::max(static_cast<size_t>(msg->msg.size()), max_pkt);
-	// Transmit any packets that are finished in the encoder.
-	for (block = dec->get_block(); block; block = dec->get_block()) {
-	  // If the link slower than the data rate we need to drop some packets.
-	  if (block->is_fec_block() & (dec->n_output_blocks() > max_queue_size)) {
-	    ++dropped_blocks;
-	    continue;
-	  }
-	  raw_send_sock.send(block->pkt_data(), block->pkt_length(), msg->port, msg->opts.link_type,
-			     msg->opts.data_rate, msg->opts.mcs, msg->opts.stbc, msg->opts.ldpc);
-	  count += block->pkt_length();
-	  ++nblocks;
-	}
-	send_time += cur_time() - loop_start;
-      } else {
-	double send_start = cur_time();
-	raw_send_sock.send(msg->msg, msg->port, msg->opts.link_type);
-	send_time += (cur_time() - send_start);
-	count += msg->msg.size();
-	max_pkt = std::max(msg->msg.size(), max_pkt);
-	++nblocks;
-      }
-      double cur = cur_time();
-      double dur = cur - start;
-      loop_time += (cur - loop_start);
-      if (dur > 2.0) {
-	LOG_INFO << "Packets/sec: " << int(nblocks / dur)
-		 << " Mbps: " << 8e-6 * count / dur
-		 << " Dropped: " << dropped_blocks
-		 << " Max packet: " << max_pkt
-		 << " Encode ms: " << 1e+3 * enc_time
-		 << " Send ms: " << 1e+3 * send_time
-		 << " Loop time ms: " << 1e3 * loop_time;
-	start = cur;
-	count = pkts = nblocks =  max_pkt = enc_time = send_time = loop_time = dropped_blocks = 0;
-      }
-    }
-  };
-  std::thread send_thr(send_th);
-
-  // Open the raw receive socket
-  RawReceiveSocket raw_recv_sock((mode == "ground"));
-  bool valid_recv_sock = false;
-  for (const auto &device : ifnames) {
-    if (raw_recv_sock.add_device(device)) {
-      valid_recv_sock = true;
-      LOG_INFO << "Receiving on interface: " << device;
-      break;
-    }
-  }
-
-  // Create the raw socket receive thread
-  bool done = false;
-  auto recv = [&raw_recv_sock, &inqueue, &done]() {
-    double prev_time = cur_time();
-    StatsAccumulator<int8_t> rssi_stats;
-    RawReceiveStats prev_stats;
-    while(!done) {
-      std::shared_ptr<monitor_message_t> msg(new monitor_message_t);
-      if (raw_recv_sock.receive(*msg)) {
-	inqueue.push(msg);
-	rssi_stats.add(msg->rssi);
-
-	double dur = (cur_time() - prev_time);
-	if (dur > 2.0) {
-	  prev_time = cur_time();
-	  const RawReceiveStats &stats = raw_recv_sock.stats();
-	  if (prev_stats.packets == 0) {
-	    prev_stats = stats;
-	  }
-	  LOG_INFO
-	    << "Packets: " << stats.packets - prev_stats.packets << " (D:"
-	    << stats.dropped_packets - prev_stats.dropped_packets << " E:"
-	    << stats.error_packets - prev_stats.error_packets
-	    << ")  MB: " << static_cast<float>(stats.bytes) * 1e-6
-	    << " (" << static_cast<float>(stats.bytes - prev_stats.bytes) * 1e-6
-	    << " - " << 8e-6 * static_cast<double>(stats.bytes - prev_stats.bytes) / dur
-	    << " Mbps)  Resets: " << stats.resets << "-" << stats.resets - prev_stats.resets
-	    << "  RSSI: " << static_cast<int16_t>(rint(rssi_stats.mean())) << " ("
-	    << static_cast<int16_t>(rssi_stats.min()) << "/"
-	    << static_cast<int16_t>(rssi_stats.max()) << ")";
-	  prev_stats = stats;
-	  rssi_stats.reset();
-	}
-      } else {
-	LOG_ERROR << "Error receiving packet.";
-	LOG_ERROR << raw_recv_sock.error_msg();
-      }
-    }
-  };
-  std::thread recv_thread(recv);
 
   // Open the UDP send socket
   int send_sock = socket(AF_INET, SOCK_DGRAM, 0);
@@ -448,7 +362,7 @@ int main(int argc, const char** argv) {
     return EXIT_FAILURE;
   }
 
-  // Create the downlink UDP interfaces as specified in the configuration file.
+  // Create the interfaces to FEC decode and send out the blocks received off the raw socket.
   std::vector<std::shared_ptr<UDPDestination> > udp_out(16);
   BOOST_FOREACH(const auto &v, conf) {
 
@@ -494,7 +408,7 @@ int main(int argc, const char** argv) {
       uint8_t nblocks = v.second.get<uint8_t>("blocks", 0);
       uint8_t nfec_blocks = v.second.get<uint8_t>("fec", 0);
 
-      // Create the FEC encoder if requested.
+      // Create the FEC decoder if requested.
       std::shared_ptr<FECDecoder> enc;
       LinkType link_type = DATA_LINK;
       if ((type == "data") && (nblocks > 0) && (nfec_blocks > 0) && (blocksize > 0)) {
@@ -510,56 +424,200 @@ int main(int argc, const char** argv) {
     }
   }
 
-  // Retrieve messages from the raw data socket.
-  double prev_time = cur_time();
-  FECDecoderStats prev_stats;
-  while (!done) {
+  // Create the thread for retrievinf messages from incoming raw socket queue
+  // and send the UDP packets.
+  auto usth = [&inqueue, &udp_out, send_sock]() {
+		udp_send_loop(inqueue, udp_out, send_sock);
+	      };
+  thrs.push_back(std::shared_ptr<std::thread>(new std::thread(usth)));
 
-    // Ralink and Atheros both always supply the FCS to userspace, no need to check
-    //if (prd.m_nRadiotapFlags & IEEE80211_RADIOTAP_F_FCS)
-    //bytes -= 4;
+  // Interfaces can come and go, so we need to loop until an interface comes up
+  // and deal with interfaces going down.
+  std::vector<std::string> ifnames;
+  while (1) {
+    bool terminate = false;
+    LOG_DEBUG << "Detecting network interfaces";
 
-    //rx_status->adapter[adapter_no].received_packet_cnt++;
-    //	rx_status->adapter[adapter_no].last_update = dbm_ts_now[adapter_no];
-    //	fprintf(stderr,"lu[%d]: %lld\n",adapter_no,rx_status->adapter[adapter_no].last_update);
-    //	rx_status->adapter[adapter_no].last_update = current_timestamp();
+    // Get a list of the network devices.
+    ifnames.clear();
+    if (!detect_network_devices(ifnames)) {
+      LOG_CRITICAL << "Error reading the network interfaces.";
+      return EXIT_FAILURE;
+    }
+    if (ifnames.empty()) {
+      sleep(1);
+      continue;
+    }
+    LOG_DEBUG << "Network interfaces found: ";
+    for (const auto &ifname : ifnames) {
+      LOG_DEBUG << "  " << ifname;
+    }
 
-    // Pull the next block off the message queue.
-    std::shared_ptr<monitor_message_t> buf = inqueue.pop();
-
-    // Lookup the destination class.
-    if (!udp_out[buf->port]) {
-      LOG_ERROR << "Error finding the output destination for port " << buf->port;
+    // Open the raw transmit socket
+    RawSendSocket raw_send_sock((mode == "ground"));
+    // Connect to the raw wifi interfaces.
+    bool valid_send_sock = false;
+    for (const auto &device : ifnames) {
+      if (raw_send_sock.add_device(device)) {
+	valid_send_sock = true;
+	LOG_INFO << "Transmitting on interface: " << device;
+	break;
+      }
+    }
+    if (!valid_send_sock) {
+      LOG_DEBUG << "Error opeing the raw socket for transmiting.";
+      sleep(1);
       continue;
     }
 
-    // Is the packet FEC encoded?
-    if (udp_out[buf->port]->fec) {
-      std::shared_ptr<FECDecoder> fec = udp_out[buf->port]->fec;
+    // Create a thread to send raw socket packets.
+    auto send_th =
+      [&outqueue, &raw_send_sock, max_queue_size, &terminate]() {
+	double start = cur_time();
+	double cur = 0;
+	double enc_time = 0;
+	double send_time = 0;
+	double loop_time = 0;
+	size_t count = 0;
+	size_t pkts = 0;
+	size_t nblocks = 0;
+	size_t max_pkt = 0;
+	size_t dropped_blocks = 0;
 
-      // Add this block to the FEC decoder.
-      fec->add_block(buf->data.data(), buf->data.size());
+	// Send message out of the send queue
+	while(!terminate) {
 
-      // Output any packets that are finished in the decoder.
-      for (std::shared_ptr<FECBlock> block = fec->get_block(); block; block = fec->get_block()) {
-	if (block->data_length() > 0) {
-	  sendto(send_sock, block->data(), block->data_length(), 0,
-		 (struct sockaddr *)&(udp_out[buf->port]->s), sizeof(struct sockaddr_in));
+	  // Pull the next packet off the queue
+	  std::shared_ptr<Message> msg = outqueue.pop();
+	  if (msg->msg.size() == 0) {
+	    continue;
+	  }
+	  
+	  double loop_start = cur_time();
+
+	  // FEC encode the packet if requested.
+	  if (msg->enc) {
+	    auto dec = msg->enc;
+	    // Get a FEC encoder block
+	    std::shared_ptr<FECBlock> block = dec->get_next_block(msg->msg.size());
+	    // Copy the data into the block
+	    std::copy(msg->msg.data(), msg->msg.data() + msg->msg.size(), block->data());
+	    // Pass it off to the FEC encoder.
+	    dec->add_block(block);
+	    enc_time += (cur_time() - loop_start);
+	    max_pkt = std::max(static_cast<size_t>(msg->msg.size()), max_pkt);
+	    // Transmit any packets that are finished in the encoder.
+	    for (block = dec->get_block(); block; block = dec->get_block()) {
+	      // If the link slower than the data rate we need to drop some packets.
+	      if (block->is_fec_block() & (dec->n_output_blocks() > max_queue_size)) {
+		++dropped_blocks;
+		continue;
+	      }
+	      raw_send_sock.send(block->pkt_data(), block->pkt_length(), msg->port,
+				 msg->opts.link_type, msg->opts.data_rate, msg->opts.mcs,
+				 msg->opts.stbc, msg->opts.ldpc);
+	      count += block->pkt_length();
+	      ++nblocks;
+	    }
+	    send_time += cur_time() - loop_start;
+	  } else {
+	    double send_start = cur_time();
+	    if (!raw_send_sock.send(msg->msg, msg->port, msg->opts.link_type)) {
+	      LOG_ERROR << "Error sending a packet on the raw socket";
+	      terminate = true;
+	      break;
+	    }
+	    send_time += (cur_time() - send_start);
+	    count += msg->msg.size();
+	    max_pkt = std::max(msg->msg.size(), max_pkt);
+	    ++nblocks;
+	  }
+	  double cur = cur_time();
+	  double dur = cur - start;
+	  loop_time += (cur - loop_start);
+	  if (dur > 2.0) {
+	    LOG_INFO << "Packets/sec: " << int(nblocks / dur)
+		     << " Mbps: " << 8e-6 * count / dur
+		     << " Dropped: " << dropped_blocks
+		     << " Max packet: " << max_pkt
+		     << " Encode ms: " << 1e+3 * enc_time
+		     << " Send ms: " << 1e+3 * send_time
+		     << " Loop time ms: " << 1e3 * loop_time;
+	    start = cur;
+	    count = pkts = nblocks = max_pkt = enc_time = send_time = loop_time =
+	      dropped_blocks = 0;
+	  }
 	}
+      };
+    std::thread send_thread(send_th);
+
+    // Open the raw receive socket
+    RawReceiveSocket raw_recv_sock((mode == "ground"));
+    bool valid_recv_sock = false;
+    for (const auto &device : ifnames) {
+      LOG_DEBUG << device;
+      if (raw_recv_sock.add_device(device)) {
+	valid_recv_sock = true;
+	LOG_INFO << "Receiving on interface: " << device;
+	break;
+      } else {
+	LOG_DEBUG << "Error: " << device;
+	LOG_DEBUG << "  " << raw_recv_sock.error_msg();
       }
-
-    } else {
-
-      // Just relay the packet if we're not FEC decoding.
-      sendto(send_sock, buf->data.data(), buf->data.size(), 0,
-	     (struct sockaddr *)&(udp_out[buf->port]->s), sizeof(struct sockaddr_in));
     }
-  }
 
-  for(auto th : thrs) {
-    th->join();
+    // Create the raw socket receive thread
+    auto recv =
+      [&raw_recv_sock, &inqueue, &terminate]() {
+	double prev_time = cur_time();
+	StatsAccumulator<int8_t> rssi_stats;
+	RawReceiveStats prev_stats;
+	while(!terminate) {
+	  std::shared_ptr<monitor_message_t> msg(new monitor_message_t);
+	  if (raw_recv_sock.receive(*msg)) {
+	    inqueue.push(msg);
+	    rssi_stats.add(msg->rssi);
+
+	    double dur = (cur_time() - prev_time);
+	    if (dur > 2.0) {
+	      prev_time = cur_time();
+	      const RawReceiveStats &stats = raw_recv_sock.stats();
+	      if (prev_stats.packets == 0) {
+		prev_stats = stats;
+	      }
+	      LOG_INFO
+		<< "Packets: " << stats.packets - prev_stats.packets << " (D:"
+		<< stats.dropped_packets - prev_stats.dropped_packets << " E:"
+		<< stats.error_packets - prev_stats.error_packets
+		<< ")  MB: " << static_cast<float>(stats.bytes) * 1e-6
+		<< " (" << static_cast<float>(stats.bytes - prev_stats.bytes) * 1e-6
+		<< " - " << 8e-6 * static_cast<double>(stats.bytes - prev_stats.bytes) / dur
+		<< " Mbps)  Resets: " << stats.resets << "-" << stats.resets - prev_stats.resets
+		<< "  RSSI: " << static_cast<int16_t>(rint(rssi_stats.mean())) << " ("
+		<< static_cast<int16_t>(rssi_stats.min()) << "/"
+		<< static_cast<int16_t>(rssi_stats.max()) << ")";
+	      prev_stats = stats;
+	      rssi_stats.reset();
+	    }
+	  } else {
+	    LOG_ERROR << "Error receiving packet";
+	    LOG_ERROR << raw_recv_sock.error_msg();
+	    terminate = true;
+	    break;
+	  }
+	}
+	LOG_INFO << "Raw socket receive thread exiting";
+      };
+    std::thread recv_thread(recv);
+
+    // Join on the send and receive threads, which should terminate if/when the device is removed.
+    recv_thread.join();
+    LOG_WARNING << "Raw receive send thread has terminated.";
+    // Force the send thread to terminate.
+    outqueue.push(std::shared_ptr<Message>(new Message()));
+    send_thread.join();
+    LOG_WARNING << "Raw socket send thread has terminated.";
   }
-  send_thr.join();
 
   return EXIT_SUCCESS;
 }
