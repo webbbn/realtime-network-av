@@ -39,8 +39,6 @@ import signal
 import logging
 import multiprocessing as mp
 
-import network
-import wfb_process
 import camera
 import rx_process as rx
 import telemetry
@@ -53,24 +51,15 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("-l", "--loglevel", default="info", \
                         help="set output logging level (debug, info, warning, error, critical)")
-    parser.add_argument("-b", "--bitrate", default=11, \
-                        help="the bitrate to use on the wifi link")
-    parser.add_argument("-vh", "--video_height", default=720, \
+    parser.add_argument("-vh", "--video_height", default=1280, \
                         help="the desired video frame height")
-    parser.add_argument("-vw", "--video_width", default=1280, \
+    parser.add_argument("-vw", "--video_width", default=2560, \
                         help="the desired video frame width")
-    parser.add_argument("-c", "--channel", default=1, \
-                        help="the channel to use on the wifi link")
-    parser.add_argument("-ohd", "--openhd", help="Maintain compatability with OpenHD", \
-                        action='store_true')
 
     # Parse the options
     args = parser.parse_args()
-    bitrate = int(args.bitrate)
     height = int(args.video_height)
     width = int(args.video_width)
-    channel = int(args.channel)
-    openhd_mode = args.openhd
 
     # Configure the logger
     log_level = getattr(logging, args.loglevel.upper())
@@ -92,21 +81,6 @@ if __name__ == '__main__':
         air_side = False
         logging.info("Camera NOT found. Running as Ground side.")
 
-    # Create the network configuration class.
-    net = network.Network()
-    ifaces = net.monitor_interfaces()
-    iface = ifaces[0]
-
-    # Configure the first interface
-    #mon = net.configure_interface(ifaces[0], bitrate=bitrate, channel=channel)
-    #if mon is None:
-        #logging.error("Error configuring the network interface: " + iface)
-        #exit(1)
-    logging.info("Using network interface " + iface)
-
-    # Start the WFB interfaces
-    wfbp_tx_proc = wfb_process.WFBTxProcess(conf_dir + "/wfb_bridge", interface = iface, port = 23)
-
     if not air_side:
         rx_proc = rx.RxCrossfireProcess(device = "/dev/ttyS0")
 
@@ -125,5 +99,4 @@ if __name__ == '__main__':
     # Join with the processing threads before shutting down
     if telem:
         telem.join()
-    wfbp_tx_proc.join()
-    wfbp_rx_proc.join()
+    cam.join()

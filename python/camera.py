@@ -14,7 +14,7 @@ from py_v4l2 import Control
 
 from format_as_table import format_as_table
 import py_srt
-import fec
+#import fec
 
 def module_exists(module_name):
     try:
@@ -76,7 +76,7 @@ class SRTOutputStream(object):
 
 class UDPOutputStream(object):
 
-    def __init__(self, host, port, broadcast = False, maxpacket = 8060):
+    def __init__(self, host, port, broadcast = False, maxpacket = 1400):
         self.log = FPSLogger()
         self.broadcast = broadcast
         self.maxpacket = maxpacket
@@ -97,43 +97,43 @@ class UDPOutputStream(object):
         for i in range(0, len(s), self.maxpacket):
             self.sock.sendto(s[i : min(i + self.maxpacket, len(s))], (host, self.port))
 
-class FECUDPOutputStream(object):
+# class FECUDPOutputStream(object):
 
-    def __init__(self, host, port, broadcast = False, maxpacket = 1310):
-        self.log = FPSLogger()
-        self.broadcast = broadcast
-        self.maxpacket = maxpacket
-        self.code_blocks = 8
-        self.fec_blocks = 4
-        self.host = host
-        self.port = port
-        self.frame_id = 0
-        #self.fec = FECCode(self.code_blocks, self.fec_blocks)
-        self.fec = fec.FECCode(self.code_blocks, self.fec_blocks)
+#     def __init__(self, host, port, broadcast = False, maxpacket = 1310):
+#         self.log = FPSLogger()
+#         self.broadcast = broadcast
+#         self.maxpacket = maxpacket
+#         self.code_blocks = 8
+#         self.fec_blocks = 4
+#         self.host = host
+#         self.port = port
+#         self.frame_id = 0
+#         #self.fec = FECCode(self.code_blocks, self.fec_blocks)
+#         self.fec = fec.FECCode(self.code_blocks, self.fec_blocks)
 
-        # Create the communication socket
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        if broadcast:
-            self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+#         # Create the communication socket
+#         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+#         if broadcast:
+#             self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
 
-    def write(self, s):
-        msg_len = len(s)
-        count = 0
-        sub_frame_len = self.maxpacket * self.code_blocks
-        num_sub_frames = math.ceil(msg_len / sub_frame_len)
-        sub_frame_id = 0
-        for i in range(0, msg_len, sub_frame_len):
-            sub_frame = s[i : i + sub_frame_len]
-            # Encode the sub-frame into a set of FEC blocks
-            fec_blocks = self.fec.encode_frame(sub_frame, frame_id=self.frame_id,
-                                               sub_frame_id=sub_frame_id,
-                                               num_sub_frames=num_sub_frames)
-            for block in fec_blocks:
-                count += len(block)
-                self.sock.sendto(block, (host, self.port))
-            sub_frame_id += 1
-        self.frame_id = (self.frame_id + 1) % 255
-        self.log.log(count)
+#     def write(self, s):
+#         msg_len = len(s)
+#         count = 0
+#         sub_frame_len = self.maxpacket * self.code_blocks
+#         num_sub_frames = math.ceil(msg_len / sub_frame_len)
+#         sub_frame_id = 0
+#         for i in range(0, msg_len, sub_frame_len):
+#             sub_frame = s[i : i + sub_frame_len]
+#             # Encode the sub-frame into a set of FEC blocks
+#             fec_blocks = self.fec.encode_frame(sub_frame, frame_id=self.frame_id,
+#                                                sub_frame_id=sub_frame_id,
+#                                                num_sub_frames=num_sub_frames)
+#             for block in fec_blocks:
+#                 count += len(block)
+#                 self.sock.sendto(block, (host, self.port))
+#             sub_frame_id += 1
+#         self.frame_id = (self.frame_id + 1) % 255
+#         self.log.log(count)
 
 class WFBOutputStream(object):
 
