@@ -1,15 +1,15 @@
 [DEFAULT]
-channel = 64
+frequency = 2412
 txpower = 40
 bitrate = 11
 loglevel = debug
 
 [ath9k]
-channel = 1
+frequency = 2412
 txpower = 40
 bitrate = 11
 
 [rtl88xx]
-channel = 64
+frequency = 5320
 txpower = 40
 bitrate = 11

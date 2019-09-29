@@ -37,7 +37,7 @@ class Network(object):
         self.config_filename = filename
         self.m_config = configparser.ConfigParser()
         self.m_config['DEFAULT'] = {
-            'channel': '1',
+            'frequency': '2412',
             'txpower': '40',
             'bitrate': '11',
             'loglevel': 'error'
@@ -123,9 +123,9 @@ class Network(object):
 
         # Retrieve the configuration file
         logging.debug("Configuring: %s of type %s" % (interface, type.name))
-        channel = self.m_config[type.name].getint('channel', 0)
-        if channel == 0:
-            channel = self.m_config['DEFAULT'].getint('channel', 0)
+        frequency = self.m_config[type.name].getint('frequency', 0)
+        if frequency == 0:
+            frequency = self.m_config['DEFAULT'].getint('frequency', 0)
         txpower = self.m_config[type.name].getint('txpower', 0)
         if txpower == 0:
             txpower = self.m_config['DEFAULT'].getint('txpower', 0)
@@ -142,23 +142,21 @@ class Network(object):
 
         # Configure the bitrate for this card
         # This is not supported by pyric, so we have to do it manually.
-        if bitrate != 0 and type == Card.ath9k:
-            try:
-                logging.debug("aab")
-                pyw.down(card)
-                logging.debug("aac")
-                pyw.modeset(card, 'monitor', flags=['other bss'])
-                pyw.up(card)
-                logging.debug("Setting the bitrate on interface " + interface + " to " + str(bitrate))
-                if os.system("iw dev " + card.dev + " set bitrates legacy-2.4 " + str(bitrate)) != 0:
-                    #if os.system("iwconfig " + card.dev + " rate 54M fixed") != 0:
-                    logging.error("Error setting the bitrate for: " + interface)
-                    return None
-                pyw.down(card)
-            except pyric.error as e:
-                logging.error("Error setting the bitrate for: " + interface)
-                logging.error(e)
-                return None
+        # if bitrate != 0 and type == Card.ath9k:
+        #     try:
+        #         pyw.down(card)
+        #         pyw.modeset(card, 'monitor', flags=['other bss'])
+        #         pyw.up(card)
+        #         logging.debug("Setting the bitrate on interface " + interface + " to " + str(bitrate))
+        #         if os.system("iw dev " + card.dev + " set bitrates legacy-2.4 " + str(bitrate)) != 0:
+        #             #if os.system("iwconfig " + card.dev + " rate 54M fixed") != 0:
+        #             logging.error("Error setting the bitrate for: " + interface)
+        #             return None
+        #         pyw.down(card)
+        #     except pyric.error as e:
+        #         logging.error("Error setting the bitrate for: " + interface)
+        #         logging.error(e)
+        #         return None
 
         # Bring up the card in monitor mode
         try:
@@ -181,22 +179,22 @@ class Network(object):
             logging.error(e)
             return False
 
-        # Configure the channel
+        # Configure the frequency
         try:
-            logging.debug("Setting the channel on interface " + interface + " to " + str(channel))
-            pyw.chset(card, channel, None)
+            logging.debug("Setting the frequency on interface " + interface + " to " + str(frequency))
+            pyw.freqset(card, frequency, None)
             error = False
 
         except pyric.error as e:
             error = True
 
-        # Try to configure the channel using iwconfig
+        # Try to configure the frequency using iwconfig
         if error:
             try:
-                logging.debug("Setting the channel on interface " + interface + " to " + str(channel) + " using iwconfig")
-                os.system("iwconfig %s channel %s" % (card.dev, str(channel)))
+                logging.debug("Setting the frequency on interface " + interface + " to " + str(frequency) + " using iwconfig")
+                os.system("iwconfig %s freq %sM" % (card.dev, str(frequency)))
             except Exception as e:
-                logging.error("Error setting the wifi channel on: " + card.dev)
+                logging.error("Error setting the wifi frequency on: " + card.dev)
                 logging.error(e)
                 return False
 
