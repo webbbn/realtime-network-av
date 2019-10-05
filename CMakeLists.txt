@@ -78,6 +78,7 @@ else ()
   find_package(Python3 COMPONENTS Interpreter)
   set(PYTHON_INSTALL_DIR "${CMAKE_INSTALL_PREFIX}/lib/python${Python3_VERSION_MAJOR}.${Python3_VERSION_MINOR}/site-packages")
 endif ()
+
 # Add rtaudio to the list of directories to build
 add_subdirectory(modules/rtaudio)
 
@@ -172,10 +173,6 @@ if (OPENMAXIL_LIBRARY)
   install(TARGETS rpi_video_player DESTINATION bin COMPONENT applications)
 endif ()
 
-add_executable(wfb_bridge src/wfb_bridge.cc src/raw_socket.cc src/fec.c src/fec.cc src/radiotap.c src/logging.cc)
-install(TARGETS wfb_bridge DESTINATION bin COMPONENT applications)
-target_link_libraries(wfb_bridge ${Boost_LIBRARIES} pcap pthread)
-
 add_executable(csrf_receiver src/csrf_receiver.cc)
 install(TARGETS csrf_receiver DESTINATION bin COMPONENT applications)
 target_link_libraries(csrf_receiver ${Boost_LIBRARIES} pthread)
@@ -198,13 +195,9 @@ install(FILES "${PROJECT_SOURCE_DIR}/fonts/Cousine-Italic.ttf" DESTINATION fonts
 install(FILES "${PROJECT_SOURCE_DIR}/fonts/Cousine-Regular.ttf" DESTINATION fonts COMPONENT fonts)
 
 # Install the configuration files
-install(FILES "${PROJECT_SOURCE_DIR}/conf/wifi_config" DESTINATION etc/default COMPONENT configuratios)
-install(FILES "${PROJECT_SOURCE_DIR}/conf/wfb_bridge" DESTINATION etc/default COMPONENT configuratios)
 install(FILES "${PROJECT_SOURCE_DIR}/conf/fpvng_controller" DESTINATION etc/default COMPONENT configuratios)
 
-# Install the configuration files
-install(FILES "${PROJECT_SOURCE_DIR}/services/wifi_config.service" DESTINATION etc/systemd/system COMPONENT configuratios)
-install(FILES "${PROJECT_SOURCE_DIR}/services/wfb_bridge.service" DESTINATION etc/systemd/system COMPONENT configuratios)
+# Install the service files
 install(FILES "${PROJECT_SOURCE_DIR}/services/fpvng_controller.service" DESTINATION etc/systemd/system COMPONENT configuratios)
 
 # Create a windows installer
