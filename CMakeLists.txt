@@ -131,11 +131,7 @@ add_executable(video_stream_player
   src/ffmpeg_decoder.cc
   src/sdl_osd.cc
   src/sdl_render_window.cc
-  src/transmitter.cc
-  src/fec.c
-  src/fec.cc
-  src/raw_socket.cc
-  src/radiotap.c)
+  src/transmitter.cc)
 target_link_libraries(video_stream_player ${AVCODEC_LIBRARIES} ${AVFORMAT_LIBRARIES} ${AVUTIL_LIBRARIES} ${SWSCALE_LIBRARIES} ${SDL2_LIBRARIES} ${SDL2_TTF_LIBRARY} ${SDL2_IMAGE_LIBRARY} ${SDL2_GFX_LIBRARY} ${Boost_LIBRARIES} ${Extra_Libraries} srt_shared ssl crypto pcap)
 install(TARGETS video_stream_player DESTINATION bin COMPONENT applications)
 

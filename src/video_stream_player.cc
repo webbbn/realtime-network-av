@@ -19,20 +19,15 @@
 #include <boost/filesystem.hpp>
 #include <boost/asio.hpp>
 
-#include <stats_accumulator.hh>
 #include <telemetry.hh>
 #include <texture.hh>
 #include <ffmpeg_decoder.hh>
 #include <sdl_render_window.hh>
 #include <transmitter.hh>
-#include <raw_socket.hh>
 #include <shared_queue.hh>
-#include <fec.hh>
 
 namespace po=boost::program_options;
 namespace ip=boost::asio::ip;
-
-typedef SharedQueue<std::shared_ptr<monitor_message_t> > MsgQueue;
 
 static bool g_quit = false;
 
@@ -54,15 +49,10 @@ double cur_time() {
 
 int main(int argc, char* argv[]) {
   std::string hostname;
-  std::string device;
   uint16_t port;
   uint32_t packet_size;
   bool use_udp;
   bool use_srt;
-  uint8_t raw_port;
-  uint16_t block_size;
-  uint16_t nblocks;
-  uint16_t nfec_blocks;
   uint32_t win_x;
   uint32_t win_y;
   bool windowed;
@@ -75,16 +65,8 @@ int main(int argc, char* argv[]) {
     ("help", "produce help message")
     ("hostname,h", po::value<std::string>(&hostname), "name or IP address of the video server")
     ("port,p", po::value<uint16_t>(&port)->default_value(0), "port number of the video server")
-    ("device,d", po::value<std::string>(&device), "the wifi device to receive video from")
     ("packet_size", po::value<uint32_t>(&packet_size)->default_value(32767),
      "the size of the packet buffer (the maximum size of a packet)")
-    ("raw_port", po::value<uint8_t>(&raw_port), "the raw socket receivers port number")
-    ("blocks_size,b", po::value<uint16_t>(&block_size)->default_value(1024),
-     "the size of the FEC blocks")
-    ("nblocks,n", po::value<uint16_t>(&nblocks)->default_value(8),
-     "the number of data blockes used in encoding")
-    ("nfec_blocks,k", po::value<uint16_t>(&nfec_blocks)->default_value(4),
-     "the number of FEC blockes used in encoding")
     ("use_udp,U", po::bool_switch(&use_udp), "use the UDP protocol rather than TCP")
     ("use_srt,S", po::bool_switch(&use_srt), "use the SRT protocol rather than TCP/UDP")
     ("win_x", po::value<uint32_t>(&win_x)->default_value(SDL_WINDOWPOS_UNDEFINED),
@@ -307,131 +289,6 @@ int main(int argc, char* argv[]) {
 	}
       }
 
-    } else if (device != "") {
-
-      // Create the packet receive thread if the user specified to recieve from a wifi device
-      MsgQueue queue;
-
-      // Open the raw socket
-      RawReceiveSocket raw_sock(raw_port);
-      if (!raw_sock.add_device(device)) {
-	std::cerr << "Error opening the raw socket\n";
-	std::cerr << "  " << raw_sock.error_msg() << std::endl;
-	return EXIT_FAILURE;
-      }
-
-      auto recv = [&raw_sock, &queue]() {
-	double prev_time = cur_time();
-	StatsAccumulator<int8_t> rssi_stats;
-	RawReceiveStats prev_stats;
-	bool done = false;
-	while(!done) {
-	  std::shared_ptr<monitor_message_t> msg(new monitor_message_t);
-	  if (raw_sock.receive(*msg)) {
-	    queue.push(msg);
-	    rssi_stats.add(msg->rssi);
-
-	    double dur = (cur_time() - prev_time);
-	    if (dur > 2.0) {
-	      prev_time = cur_time();
-	      const RawReceiveStats &stats = raw_sock.stats();
-	      if (prev_stats.packets == 0) {
-		prev_stats = stats;
-	      }
-	      std::cerr
-		<< "Packets: " << stats.packets - prev_stats.packets << " (D:"
-		<< stats.dropped_packets - prev_stats.dropped_packets << " E:"
-		<< stats.error_packets - prev_stats.error_packets
-		<< ")  MB: " << static_cast<float>(stats.bytes) * 1e-6
-		<< " (" << static_cast<float>(stats.bytes - prev_stats.bytes) * 1e-6
-		<< " - " << 8e-6 * static_cast<double>(stats.bytes - prev_stats.bytes) / dur
-		<< " Mbps)  Resets: " << stats.resets << "-" << stats.resets - prev_stats.resets
-		<< "  RSSI: " << static_cast<int16_t>(rint(rssi_stats.mean())) << " ("
-		<< static_cast<int16_t>(rssi_stats.min()) << "/"
-		<< static_cast<int16_t>(rssi_stats.max()) << ")\n";
-	      prev_stats = stats;
-	      rssi_stats.reset();
-	    }
-	  } else {
-	    std::cerr << "Error receiving packet.\n" << raw_sock.error_msg() << std::endl;
-	  }
-	}
-      };
-
-      // Create the receive thread.
-      std::thread recv_thread(recv);
-
-      SharedQueue<std::shared_ptr<std::vector<uint8_t> > > dec_queue;
-      auto decoder = [dec, &dec_queue]() {
-
-	bool done = false;
-	while (!done) {
-
-	  // Pull the next block off the queue.
-	  std::shared_ptr<std::vector<uint8_t> > buf = dec_queue.pop();
-
-	  // Add the block to the decoder
-	  done |= !dec->decode(buf->data(), buf->size());
-	}
-      };
-
-      // Create the decode thread.
-      std::thread dec_thread(decoder);
-
-      //FECDecoder fec(nblocks, nfec_blocks, block_size);
-
-      // Pull packets off the message queue.
-      bool done = false;
-      double prev_time = cur_time();
-      FECDecoderStats prev_stats;
-      while (!done) {
-
-	// Pull the next block off the message queue.
-	std::shared_ptr<monitor_message_t> buf = queue.pop();
-
-	// Is the packet FEC encoded?
-	if ((block_size > 0) && (nblocks > 0) && (nfec_blocks > 0)) {
-
-	  // Add this block to the FEC decoder.
-/*
-	  if (fec.add_block(buf->data.data()) == FECStatus::FEC_COMPLETE) {
-
-	    // Output the data blocks
-	    const std::vector<uint8_t*> &blocks = fec.blocks();
-	    for (size_t b = 0; b < nblocks; ++b) {
-	      uint8_t *block = blocks[b];
-	      uint32_t cur_block_size = *reinterpret_cast<const uint32_t*>(block);
-	      if (cur_block_size > 0) {
-		std::shared_ptr<std::vector<uint8_t> >
-		  decbuf(new std::vector<uint8_t>(cur_block_size));
-		std::copy(block + 4, block + 4 + cur_block_size, decbuf->data());
-		dec_queue.push(decbuf);
-	      }
-	    }
-	  }
-	  double dur = (cur_time() - prev_time);
-	  if (dur > 2.0) {
-	    // Combine all decoder stats.
-	    const FECDecoderStats &stats = fec.stats();
-	    std::cerr
-	      << "Decode stats: "
-	      << stats.total_packets - prev_stats.total_packets << " / "
-	      << stats.dropped_packets - prev_stats.dropped_packets
-	      << "  Queue size: " << queue.size() << std::endl;
-	    prev_time = cur_time();
-	    prev_stats = stats;
-	  }
-*/
-
-	} else {
-
-	  // Just pass on  the packet if we're not FEC decoding.
-	  std::shared_ptr<std::vector<uint8_t> > decbuf(new std::vector<uint8_t>(buf->data.size()));
-	  std::copy(buf->data.begin(), buf->data.end(), decbuf->data());
-	  dec_queue.push(decbuf);
-	}
-      }
-  
     } else {
 
       // Wait until we get a connection to a telemetry stream
