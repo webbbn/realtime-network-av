@@ -1,4 +1,5 @@
 [global]
-loglevel = error
+loglevel = warning
 video_width = 2560
 video_height = 1280
+telemetry_uart = /dev/ttyS1
