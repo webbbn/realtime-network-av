@@ -10,7 +10,7 @@ import sdl2.ext
 class Transmitter(object):
     """Read the transmitter stick/switch postions and relay them out over UDP"""
 
-    def __init__(self, channels=16, period=0.02, ip="127.0.0.1", port=15541):
+    def __init__(self, channels=16, period=0.02, ip="127.0.0.1", port=14551):
         """Initialize the joystick class"""
         self.channels = channels
         self.done = False
@@ -64,6 +64,9 @@ class Transmitter(object):
             self.send(channels)
             time.sleep(self.period)
 
+    def join(self):
+        self.thread.join()
+
 if __name__ == '__main__':
     trans = Transmitter()
-    trans.start()
+    trans.join()
