@@ -43,6 +43,7 @@ import multiprocessing as mp
 
 import camera
 import telemetry
+import transmitter
 
 config_filename = os.path.join(root_dir, "etc/default/fpvng_controller")
 
@@ -93,10 +94,9 @@ if __name__ == '__main__':
     telem_uart = config['global'].get('telemetry_uart')
     if telem_uart and air_side:
         telem = telemetry.SerialTelemetryRx(uart=telem_uart, baudrate=115200)
-    elif telem_uart:
-        fc_telem_queue = queue.Queue()
-        telemrx = telemetry.SerialTelemetryRx(fc_telem_queue, uart=telem_uart, baudrate=57600)
-        telemtx = telemetry.UDPTelemetryTx(fc_telem_queue, "127.0.0.1", 14551)
+
+    # Start the transmitter reader interface
+    trans = transmitter.Transmitter()
 
     # Join with the processing threads before shutting down
     if telem:
