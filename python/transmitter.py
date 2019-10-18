@@ -5,7 +5,6 @@ import socket
 import struct
 
 import sdl2
-import sdl2.ext
 
 class Transmitter(object):
     """Read the transmitter stick/switch postions and relay them out over UDP"""
@@ -17,12 +16,10 @@ class Transmitter(object):
         self.period = period
         self.ip = ip
         self.port = port
+        self.joystick = None
 
         # Initialize the SDL joystick module
         sdl2.SDL_Init(sdl2.SDL_INIT_JOYSTICK)
-
-        # Open the first joystick, which should be the transmitter
-        self.joystick = sdl2.SDL_JoystickOpen(0)
 
         # Create the UDP socket
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -40,6 +37,16 @@ class Transmitter(object):
 
         # Force an update of the joystick channels
         sdl2.SDL_PumpEvents()
+
+        # Ensure that the Tx is connected
+        if sdl2.SDL_NumJoysticks() == 0:
+            if self.joystick:
+                sdl2.SDL_JoystickClose(self.joystick)
+                self.joystick = None
+            return False
+        elif not self.joystick:
+            # Open the first joystick if necessary
+            self.joystick = sdl2.SDL_JoystickOpen(0)
 
         # Read all the channels
         ret = []
@@ -61,7 +68,8 @@ class Transmitter(object):
         """Periodically read the transmitter and send the values over UDP"""
         while not self.done:
             channels = self.read()
-            self.send(channels)
+            if channels:
+                self.send(channels)
             time.sleep(self.period)
 
     def join(self):
