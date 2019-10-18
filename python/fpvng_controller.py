@@ -28,9 +28,6 @@ python_dir = os.path.join(root_dir, "lib/python" + str(sys.version_info.major) +
                           "." + str(sys.version_info.minor) + "/site-packages")
 sys.path.append(python_dir)
 
-# The default configuration directory.
-conf_dir = os.path.join(root_dir, "conf")
-
 import io
 import time
 import queue
@@ -45,7 +42,7 @@ import camera
 import telemetry
 import transmitter
 
-config_filename = os.path.join(root_dir, "etc/default/fpvng_controller")
+config_filename = os.path.join(root_dir, "etc/default/fpvng")
 
 # Define an exit handler to do a graceful shutdown
 def exit_handler(sig, frame):
@@ -59,7 +56,9 @@ if __name__ == '__main__':
         'loglevel': 'error',
         'video_width': 2560,
         'video_height': 1280,
-        'telemetry_uart': ''
+        'telemetry_uart': '',
+        'rc_host': '127.0.0.1',
+        'rc_port': 15441
     }
     try:
         config.read(config_filename)
@@ -92,13 +91,25 @@ if __name__ == '__main__':
     # Start the telemetry parsers / forwarders
     telem = None
     telem_uart = config['global'].get('telemetry_uart')
+    rc_host = config['global'].get('rc_host')
+    rc_port = int(config['global'].get('rc_port'))
     if telem_uart and air_side:
-        telem = telemetry.SerialTelemetryRx(uart=telem_uart, baudrate=115200)
+        print(rc_host, rc_port)
+        telem = telemetry.SerialTelemetryRx(uart=telem_uart, baudrate=115200, \
+                                            rc_host=rc_host, rc_port=rc_port)
+    else:
+        telem = None
 
     # Start the transmitter reader interface
-    trans = transmitter.Transmitter()
+    if not air_side:
+        trans = transmitter.Transmitter()
+    else:
+        trans = None
 
     # Join with the processing threads before shutting down
+    if trans:
+        trans.join()
     if telem:
         telem.join()
     cam.join()
+
