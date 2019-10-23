@@ -4,7 +4,7 @@ After=wfb_config.service
 
 [Service]
 Type=simple
-ExecStart=/usr/local/bin/fpvng_controller.py
+ExecStart=/bin/fpvng_controller.py
 ExecReload=/bin/kill -1 $MAINPID
 ExecStop=/bin/kill -9 $MAINPID
 TimeoutStopSec=5s

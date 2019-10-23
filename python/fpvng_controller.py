@@ -28,9 +28,6 @@ python_dir = os.path.join(root_dir, "lib/python" + str(sys.version_info.major) +
                           "." + str(sys.version_info.minor) + "/site-packages")
 sys.path.append(python_dir)
 
-# The default configuration directory.
-conf_dir = os.path.join(root_dir, "conf")
-
 import io
 import time
 import queue
@@ -42,10 +39,10 @@ import configparser
 import multiprocessing as mp
 
 import camera
-import rx_process as rx
 import telemetry
+import transmitter
 
-config_filename = os.path.join(root_dir, "etc/default/fpvnv_controller")
+config_filename = os.path.join(root_dir, "etc/default/fpvng")
 
 # Define an exit handler to do a graceful shutdown
 def exit_handler(sig, frame):
@@ -58,7 +55,10 @@ if __name__ == '__main__':
     config['global'] = {
         'loglevel': 'error',
         'video_width': 2560,
-        'video_height': 1280
+        'video_height': 1280,
+        'telemetry_uart': '',
+        'rc_host': '127.0.0.1',
+        'rc_port': 15441
     }
     try:
         config.read(config_filename)
@@ -88,22 +88,28 @@ if __name__ == '__main__':
         air_side = False
         logging.info("Camera NOT found. Running as Ground side.")
 
-    if not air_side:
-        rx_proc = rx.RxCrossfireProcess(device = "/dev/ttyS0")
-
-    # Create the FC telemetry queue
-    #fc_telem_queue = queue.Queue()
-
     # Start the telemetry parsers / forwarders
-    telem = False
-    #if air_side:
-    #    telem = telemetry.SerialTelemetryRx(uart="/dev/ttyS1", baudrate=115200)
-    #     telemtx = telemetry.UDPTelemetryTx(fc_telem_queue, "127.0.0.1", 14550)
-    # else:
-    #     telemrx = telemetry.SerialTelemetryRx(fc_telem_queue, uart="/dev/ttyS0", baudrate=57600)
-    #     telemtx = telemetry.UDPTelemetryTx(fc_telem_queue, "127.0.0.1", 14551)
+    telem = None
+    telem_uart = config['global'].get('telemetry_uart')
+    rc_host = config['global'].get('rc_host')
+    rc_port = int(config['global'].get('rc_port'))
+    if telem_uart and air_side:
+        print(rc_host, rc_port)
+        telem = telemetry.SerialTelemetryRx(uart=telem_uart, baudrate=115200, \
+                                            rc_host=rc_host, rc_port=rc_port)
+    else:
+        telem = None
+
+    # Start the transmitter reader interface
+    if not air_side:
+        trans = transmitter.Transmitter()
+    else:
+        trans = None
 
     # Join with the processing threads before shutting down
+    if trans:
+        trans.join()
     if telem:
         telem.join()
     cam.join()
+

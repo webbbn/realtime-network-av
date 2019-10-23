@@ -209,6 +209,6 @@ class UDPStatusRx(object):
         self.thread.join()
 
 if __name__ == '__main__':
-#    telem = SerialTelemetryRx(rc_host="127.0.0.1")
+    telem = SerialTelemetryRx(rc_host="127.0.0.1")
     status = UDPStatusRx(host="127.0.0.1", port=5800)
     status.join()

@@ -1,0 +1,7 @@
+[global]
+loglevel = warning
+video_width = 2560
+video_height = 1280
+telemetry_uart = /dev/ttyS1
+rc_host = 127.0.0.1
+rc_port = 14551
