@@ -160,7 +160,7 @@ class UDPTelemetryTx(object):
             self.mavs.write(msg.get_msgbuf())
 
 class SerialTelemetryTx(object):
-    """Seld telemetry over a standard UART connection"""
+    """Send telemetry over a standard UART connection"""
 
     def __init__(self, queue, uart = "/dev/ttyS1", baudrate = 57600):
         self.queue = queue
@@ -210,5 +210,5 @@ class UDPStatusRx(object):
 
 if __name__ == '__main__':
     telem = SerialTelemetryRx(rc_host="127.0.0.1")
-    status = UDPStatusRx(host="127.0.0.1", port=5800)
+    status = UDPStatusRx(host="127.0.0.1", port=5801)
     status.join()

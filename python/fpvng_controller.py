@@ -94,11 +94,16 @@ if __name__ == '__main__':
     rc_host = config['global'].get('rc_host')
     rc_port = int(config['global'].get('rc_port'))
     if telem_uart and air_side:
-        print(rc_host, rc_port)
         telem = telemetry.SerialTelemetryRx(uart=telem_uart, baudrate=115200, \
                                             rc_host=rc_host, rc_port=rc_port)
     else:
         telem = None
+
+    # Start the link status receiver
+    if air_side:
+        status = telemetry.UDPStatusRx(host="127.0.0.1", port=5801)
+    else:
+        status = telemetry.UDPStatusRx(host="127.0.0.1", port=5800)
 
     # Start the transmitter reader interface
     if not air_side:
