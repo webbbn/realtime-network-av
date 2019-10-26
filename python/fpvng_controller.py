@@ -41,6 +41,7 @@ import multiprocessing as mp
 import camera
 import telemetry
 import transmitter
+import udp_relay
 
 config_filename = os.path.join(root_dir, "etc/default/fpvng")
 
@@ -111,10 +112,14 @@ if __name__ == '__main__':
     else:
         trans = None
 
+    # Start the UDP relay threads
+    tether = udp_relay.USBTetherRelay()
+
     # Join with the processing threads before shutting down
+    tether.join()
+    status.join()
     if trans:
         trans.join()
     if telem:
         telem.join()
     cam.join()
-

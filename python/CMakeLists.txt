@@ -26,4 +26,12 @@ endif ()
 install(PROGRAMS fc_comm.py pycamera_tx.py fpvng_controller.py DESTINATION bin)
 
 # Install the python libraries
-install(FILES format_as_table.py network.py camera.py telemetry.py MultiWii.py transmitter.py DESTINATION ${PYTHON_INSTALL_DIR})
+install(FILES
+  format_as_table.py
+  network.py
+  camera.py
+  telemetry.py
+  MultiWii.py
+  transmitter.py
+  udp_relay.py
+  DESTINATION ${PYTHON_INSTALL_DIR})

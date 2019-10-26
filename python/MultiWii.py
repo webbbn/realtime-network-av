@@ -230,7 +230,7 @@ class MultiWii(object):
                                         #end if
                                 #end if
                         else:
-                                sleep(0)
+                                sleep(0.01)
                         #end if
                 #end while
                 self._port.close()
