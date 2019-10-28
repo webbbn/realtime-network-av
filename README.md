@@ -12,8 +12,7 @@ git submodule update --init --recursive
 
 ~~~
 sudo apt-get install cmake libasound2-dev libboost-all-dev libavcodec-dev libavformat-dev libswscale-dev libssl-dev cython3 libv4l-dev libpcap-dev libsqlite3-dev python3-pip python3-numpy python-future python-lxml python3-future python3-lxml python3-setuptools python3-serial python3-wheel python3-pyudev python3-sdl2
-sudo apt-get purge network-manager
-sudo -H pip3 install pymavlink pyric
+sudo -H pip3 install pymavlink
 ~~~
 
 # Install dependent packages on Raspberry Pi
