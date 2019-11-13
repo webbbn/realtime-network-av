@@ -8,13 +8,12 @@ import math
 import numpy as np
 import subprocess
 import multiprocessing as mp
-import py_v4l2 as v4l
-from py_v4l2 import Frame
-from py_v4l2 import Control
+#import py_v4l2 as v4l
+#from py_v4l2 import Frame
+#from py_v4l2 import Control
 
-from format_as_table import format_as_table
-import py_srt
-#import fec
+from wifibroadcast.format_as_table import format_as_table
+from wifibroadcast import fec
 
 def module_exists(module_name):
     try:
@@ -26,7 +25,8 @@ def module_exists(module_name):
 
 # Try loading picamera module
 found_picamera = module_exists("picamera")
-
+if found_picamera:
+    import picamera
 
 class FPSLogger(object):
 
@@ -52,28 +52,6 @@ class FPSLogger(object):
             self.bytes = 0
             self.count = 0
 
-class SRTOutputStream(object):
-
-    def __init__(self, host, port, maxpacket = 1310):
-        self.maxpacket = maxpacket
-        self.log = FPSLogger()
-
-        # Create the communication socket
-        self.sock = py_srt.create_socket()
-
-        # Try connect to the receiver
-        st = py_srt.connect(self.sock, host, port)
-        if not st:
-            raise Exception("Error connecting to SRT://%s:%d" % (host, port))
-
-    def __del__(self):
-        py_srt.close(self.sock)
-
-    def write(self, s):
-        self.log.log(len(s))
-        for i in range(0, len(s), self.maxpacket):
-            py_srt.sendmsg(self.sock, s[i : min(i + self.maxpacket, len(s))], ttl=250)
-
 class UDPOutputStream(object):
 
     def __init__(self, host, port, broadcast = False, maxpacket = 1400):
@@ -82,6 +60,7 @@ class UDPOutputStream(object):
         self.maxpacket = maxpacket
         self.host = host
         self.port = port
+        self.fec = fec.PyFECBufferEncoder(maxpacket, 0.5)
 
         # Create the communication socket
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -94,8 +73,10 @@ class UDPOutputStream(object):
             host = '<broadcast>'
         else:
             host = self.host
-        for i in range(0, len(s), self.maxpacket):
-            self.sock.sendto(s[i : min(i + self.maxpacket, len(s))], (host, self.port))
+        for b in self.fec.encode_buffer(s):
+            self.sock.sendto(b, (host, self.port))
+        # for i in range(0, len(s), self.maxpacket):
+        #     self.sock.sendto(s[i : min(i + self.maxpacket, len(s))], (host, self.port))
 
 # class FECUDPOutputStream(object):
 
@@ -254,8 +235,8 @@ class Camera(object):
         # Set some default parameters
         self.width = 1280
         self.height = 720
-        self.bitrate = 5000000
-        self.fps = 30
+        self.bitrate = 6000000
+        self.fps = 60
         self.intra_period = 3
         self.quality = 20
         self.inline_headers = True
@@ -272,9 +253,7 @@ class Camera(object):
         self.using_socket = False
 
         # Create the connection for streaming the data on
-        if protocol == "SRT":
-            self.stream = SRTOutputStream(host, port)
-        elif protocol.upper() == "UDP":
+        if protocol.upper() == "UDP":
             self.stream = UDPOutputStream(host, port)
         elif protocol.upper() == "UDPB":
             self.stream = UDPOutputStream(host, port, broadcast=True)
@@ -302,21 +281,23 @@ class Camera(object):
         self.stop_streaming()
 
     # Change the parameters for the video stream
-    def streaming_params(self, width, height, bitrate, intra_period = 30, quality=20, inline_headers = True) :
+    def streaming_params(self, width, height, bitrate, intra_period = 30, quality=20, fps = 60, inline_headers = True) :
         self.width = width
         self.height = height
         self.bitrate = bitrate
         self.intra_period = intra_period
         self.quality = quality
+        self.fps = fps
         self.inline_headers = inline_headers
 
     # Change the parameters for the video recording
-    def recording_params(self, width, height, bitrate, intra_period = 30, quality=20, inline_headers = True) :
+    def recording_params(self, width, height, bitrate, intra_period = 30, quality=20, fps = 60, inline_headers = True) :
         self.rec_width = width
         self.rec_height = height
         self.rec_bitrate = bitrate
         self.rec_intra_period = intra_period
         self.rec_quality = quality
+        self.fps = fps
         self.rec_inline_headers = inline_headers
 
     def start_streaming(self, rec_filename = False, sock = None):
@@ -349,7 +330,11 @@ class Camera(object):
                                             splitter_port=2, resize=(self.width, self.height))
             else:
                 self.camera.start_recording(self.stream, format='h264', intra_period=self.intra_period,
-                                            inline_headers=self.intra_period, bitrate=self.bitrate, quality=self.quality)
+                                            inline_headers=self.inline_headers, bitrate=self.bitrate)
+
+            while self.streaming:
+                self.wait_streaming(1)
+
         elif self.using_socket:
 
             # Read from the socket and send it out
@@ -386,7 +371,8 @@ class Camera(object):
 class CameraProcess(object):
 
     def __init__(self, device = False, protocol = "UDP", host = "", port = 5600, \
-                 width = 1280, height = 720, bitrate = 25000000, quality = 20, inline_headers = True):
+                 width = 1280, height = 720, bitrate = 4000000, quality = 20, inline_headers = True, \
+                 fps = 30, intra_period = 5):
         self.device = device
         self.protocol = protocol
         self.host = host
@@ -396,8 +382,12 @@ class CameraProcess(object):
         self.bitrate = bitrate
         self.quality = quality
         self.inline_headers = inline_headers
+        self.fps = fps
+        self.intra_period = intra_period
 
     def start(self):
+        h264_device = None
+
         if self.host != "":
             host_port = self.host + ":" + str(self.port)
         else:
@@ -406,10 +396,9 @@ class CameraProcess(object):
         # Read from the Raspberry Pi camera if it was found and if the user didn't specify an alternate device
         if not self.device and found_picamera:
             logging.info("Using picamera to stream %dx%d/%d video to %s at %f Mbps Using %s protocol " % \
-                         (self.width, self.height, fps, host_port, self.bitrate, self.protocol))
+                         (self.width, self.height, self.fps, host_port, self.bitrate, self.protocol))
 
         else:
-            h264_device = None
 
             # Try finding a v4l2 device that will work
             if self.device :
@@ -445,7 +434,8 @@ class CameraProcess(object):
                          (self.width, self.height, host_port, self.bitrate, self.protocol, h264_device))
 
         self.camera = Camera(self.protocol, self.host, self.port, h264_device)
-        self.camera.streaming_params(self.width, self.height, self.bitrate, self.quality, self.inline_headers)
+        self.camera.streaming_params(self.width, self.height, self.bitrate, self.intra_period, self.quality,
+                                     self.fps, self.inline_headers)
         self.proc = mp.Process(target=self.run)
         self.proc.start()
         return True
@@ -457,3 +447,12 @@ class CameraProcess(object):
     def join(self):
         if self.proc:
             self.proc.join()
+
+if __name__ == '__main__':
+    logging.basicConfig(level='DEBUG')
+    #cam = CameraProcess(host="192.168.1.38")
+    cam = CameraProcess()
+    if cam.start():
+        cam.join()
+    else:
+        LOG_ERROR << "Error starting camera process"

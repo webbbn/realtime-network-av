@@ -38,10 +38,8 @@ import logging.handlers
 import configparser
 import multiprocessing as mp
 
-import camera
-import telemetry
-import transmitter
-import udp_relay
+from wifibroadcast import camera, telemetry
+#import transmitter, utp_relay
 
 config_filename = os.path.join(root_dir, "etc/default/fpvng")
 
@@ -80,8 +78,7 @@ if __name__ == '__main__':
     signal.signal(signal.SIGINT, exit_handler)
 
     # Try to start the camera
-    cam = camera.CameraProcess(width = int(config['global'].get('video_width')),
-                               height = int(config['global'].get('video_height')))
+    cam = camera.CameraProcess()
     if cam.start():
         air_side = True
         logging.info("Camera found. Running as Air side.")
@@ -94,7 +91,7 @@ if __name__ == '__main__':
     telem_uart = config['global'].get('telemetry_uart')
     rc_host = config['global'].get('rc_host')
     rc_port = int(config['global'].get('rc_port'))
-    if telem_uart and air_side:
+    if telem_uart and air_side and 0:
         telem = telemetry.SerialTelemetryRx(uart=telem_uart, baudrate=115200, \
                                             rc_host=rc_host, rc_port=rc_port)
     else:
@@ -113,11 +110,11 @@ if __name__ == '__main__':
         trans = None
 
     # Start the UDP relay threads
-    tether = udp_relay.USBTetherRelay()
+    # tether = udp_relay.USBTetherRelay()
 
     # Join with the processing threads before shutting down
-    tether.join()
-    status.join()
+    # tether.join()
+    # status.join()
     if trans:
         trans.join()
     if telem:

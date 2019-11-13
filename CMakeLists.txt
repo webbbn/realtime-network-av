@@ -19,6 +19,19 @@ endif()
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3 -DNDEBUG")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D_hypot=hypot -O3 -DNDEBUG -DMS_WIN64 -DBOOST_LOG_DYN_LINK")
 
+# Add the usr directory to most of the paths if the installcation directory is /
+if (${CMAKE_INSTALL_PREFIX} STREQUAL "/")
+  set(BinDir "usr/bin")
+  set(LibDir "usr/lib")
+  set(IncludeDir "usr/include")
+  set(PythonDistDir "dist-packages")
+else ()
+  set(BinDir "bin")
+  set(LibDir "lib")
+  set(IncludeDir "include")
+  set(PythonDistDir "site-packages")
+endif ()
+
 # We have submodule, so we need git to update the submodule
 find_package(Git QUIET)
 
@@ -51,11 +64,6 @@ if(NOT EXISTS "${PROJECT_SOURCE_DIR}/modules/dcadec/dcadec.c")
   message(FATAL_ERROR "The dcadec submodule was not downloaded! Please update submodules and try again.")
 endif()
 
-# Ensure the srt directory was checked out successfully
-if(NOT EXISTS "${PROJECT_SOURCE_DIR}/modules/srt/CMakeLists.txt")
-  message(FATAL_ERROR "The srt submodule was not downloaded! Please update submodules and try again.")
-endif()
-
 # Add the local include directory to the include path
 include_directories(${PROJECT_SOURCE_DIR}/include)
 
@@ -65,7 +73,7 @@ if (USE_OMX)
   link_directories("/opt/vc/lib")
   add_executable(rpi-camera-server src/rpi-camera-server.c)
   target_link_libraries(rpi-camera-server openmaxil bcm_host vcos pthread)
-  install(TARGETS rpi-camera-server DESTINATION bin COMPONENT applications)
+  install(TARGETS rpi-camera-server DESTINATION ${BinDir} COMPONENT applications)
 endif (USE_OMX)
 
 # Find the python3 interpreter
@@ -73,17 +81,14 @@ if (${CMAKE_VERSION} VERSION_LESS "3.12.0")
   set(Python_ADDITIONAL_VERSIONS "3")
   set(PYTHON_EXECUTABLE "/usr/bin/python3")
   find_package(PythonInterp 3.0 REQUIRED)
-  set(PYTHON_INSTALL_DIR "${CMAKE_INSTALL_PREFIX}/lib/python${PYTHON_VERSION_MAJOR}.${PYTHON_VERSION_MINOR}/site-packages")
+  set(RELATIVE_PYTHON_DIR "${LibDir}/python${PYTHON_VERSION_MAJOR}.${PYTHON_VERSION_MINOR}/${PythonDistDir}/wifibroadcast")
 else ()
   find_package(Python3 COMPONENTS Interpreter)
-  set(PYTHON_INSTALL_DIR "${CMAKE_INSTALL_PREFIX}/lib/python${Python3_VERSION_MAJOR}.${Python3_VERSION_MINOR}/site-packages")
+  set(RELATIVE_PYTHON_DIR "${LibDir}/python${Python3_VERSION_MAJOR}.${Python3_VERSION_MINOR}/${PythonDistDir}/wifibroadcast")
 endif ()
 
 # Add rtaudio to the list of directories to build
 add_subdirectory(modules/rtaudio)
-
-# Add srt to the list of directories to build
-add_subdirectory(modules/srt)
 
 # Add the python directory to the list of directories to build
 add_subdirectory(python)
@@ -103,7 +108,7 @@ include_directories(${Boost_INCLUDE_DIR})
 # Build the udp_audio server
 add_executable(udp_audio_player src/udp_audio_player.cc)
 target_link_libraries(udp_audio_player rtaudio ${Extra_Libraries} ${Boost_LIBRARIES})
-install(TARGETS udp_audio_player DESTINATION bin COMPONENT applications)
+install(TARGETS udp_audio_player DESTINATION ${BinDir} COMPONENT applications)
 
 add_subdirectory(modules/dcadec)
 
@@ -122,7 +127,7 @@ find_library(SDL2_GFX_LIBRARY SDL2_gfx)
 # Add the mavlink directory to the build
 include_directories(${PROJECT_SOURCE_DIR}/modules/mavlink_c/common)
 
-include_directories(${SDL2_INCLUDE_DIRS} ${SRT_SOURCE_DIR}/srtcore ${SRT_SOURCE_DIR}/common ${SRT_BINARY_DIR} ${PROJECT_BINARY_DIR}/sdl/include)
+include_directories(${SDL2_INCLUDE_DIRS} ${PROJECT_BINARY_DIR}/sdl/include)
 link_directories(${PROJECT_BINARY_DIR})
 add_executable(video_stream_player
   src/video_stream_player.cc
@@ -132,15 +137,15 @@ add_executable(video_stream_player
   src/sdl_osd.cc
   src/sdl_render_window.cc
   src/transmitter.cc)
-target_link_libraries(video_stream_player ${AVCODEC_LIBRARIES} ${AVFORMAT_LIBRARIES} ${AVUTIL_LIBRARIES} ${SWSCALE_LIBRARIES} ${SDL2_LIBRARIES} ${SDL2_TTF_LIBRARY} ${SDL2_IMAGE_LIBRARY} ${SDL2_GFX_LIBRARY} ${Boost_LIBRARIES} ${Extra_Libraries} srt_shared ssl crypto pcap)
-install(TARGETS video_stream_player DESTINATION bin COMPONENT applications)
+target_link_libraries(video_stream_player ${AVCODEC_LIBRARIES} ${AVFORMAT_LIBRARIES} ${AVUTIL_LIBRARIES} ${SWSCALE_LIBRARIES} ${SDL2_LIBRARIES} ${SDL2_TTF_LIBRARY} ${SDL2_IMAGE_LIBRARY} ${SDL2_GFX_LIBRARY} ${Boost_LIBRARIES} ${Extra_Libraries} ssl crypto pcap)
+install(TARGETS video_stream_player DESTINATION ${BinDir} COMPONENT applications)
 
 find_library(V4L_LIBRARY v4l2)
 if (V4L_LIBRARY)
   add_executable(v4l_h264_server
     src/v4l_h264_server.cc)
   target_link_libraries(v4l_h264_server ${V4L_LIBRARY} ${Boost_LIBRARIES} ${Extra_Libraries})
-  install(TARGETS v4l_h264_server DESTINATION bin COMPONENT applications)
+  install(TARGETS v4l_h264_server DESTINATION ${BinDir} COMPONENT applications)
 endif (V4L_LIBRARY)
 
 find_package(ALSA)
@@ -149,7 +154,7 @@ if (ALSA_FOUND)
   add_executable(spdif_to_udp src/spdif_to_udp.cc)
   link_directories(modules/dcadec)
   target_link_libraries(spdif_to_udp dcadec asound ${Boost_LIBRARIES})
-  install(TARGETS spdif_to_udp DESTINATION bin COMPONENT applications)
+  install(TARGETS spdif_to_udp DESTINATION ${BinDir} COMPONENT applications)
 endif ()
 
 find_library(OPENMAXIL_LIBRARY openmaxil HINT /opt/vc/lib)
@@ -166,11 +171,11 @@ if (OPENMAXIL_LIBRARY)
   link_directories(/opt/vc/lib)
   add_executable(rpi_video_player src/rpi_video_player.cc src/ilclient.c src/ilcore.c)
   target_link_libraries(rpi_video_player ${OPENMAXIL_LIBRARY} ${BRCMGLES_LIBRARY} ${BRCMEGL_LIBRARY} ${OPENMAXIL_LIBRARY} ${BCM_HOST_LIBRARY} ${VCOS_LIBRARY} ${VCHIQ_LIBRARY} ${Extra_Libraries})
-  install(TARGETS rpi_video_player DESTINATION bin COMPONENT applications)
+  install(TARGETS rpi_video_player DESTINATION ${BinDir} COMPONENT applications)
 endif ()
 
 add_executable(csrf_receiver src/csrf_receiver.cc)
-install(TARGETS csrf_receiver DESTINATION bin COMPONENT applications)
+install(TARGETS csrf_receiver DESTINATION ${BinDir} COMPONENT applications)
 target_link_libraries(csrf_receiver ${Boost_LIBRARIES} pthread)
 
 # Add the wifibroadcast directory to the build

@@ -13,8 +13,6 @@
 #include <shlwapi.h>
 #endif
 
-#include <srt.h>
-
 #include <boost/program_options.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/asio.hpp>
@@ -52,7 +50,6 @@ int main(int argc, char* argv[]) {
   uint16_t port;
   uint32_t packet_size;
   bool use_udp;
-  bool use_srt;
   uint32_t win_x;
   uint32_t win_y;
   bool windowed;
@@ -68,7 +65,6 @@ int main(int argc, char* argv[]) {
     ("packet_size", po::value<uint32_t>(&packet_size)->default_value(32767),
      "the size of the packet buffer (the maximum size of a packet)")
     ("use_udp,U", po::bool_switch(&use_udp), "use the UDP protocol rather than TCP")
-    ("use_srt,S", po::bool_switch(&use_srt), "use the SRT protocol rather than TCP/UDP")
     ("win_x", po::value<uint32_t>(&win_x)->default_value(SDL_WINDOWPOS_UNDEFINED),
      "the X component of the starting location of the window")
     ("win_y", po::value<uint32_t>(&win_y)->default_value(SDL_WINDOWPOS_UNDEFINED),
@@ -196,73 +192,6 @@ int main(int argc, char* argv[]) {
 	  done = !dec->decode(buffer, recv);
 	}
 	done |= check_for_quit();
-      }
-
-    } else if (use_srt) {
-      int ss, st;
-      struct sockaddr_in sa;
-      int yes = 1;
-      struct sockaddr_storage their_addr;
-
-      // Initialize the SRT library
-      srt_startup();
-
-      // Create the SRT socket
-      ss = srt_create_socket();
-      if (ss == SRT_ERROR) {
-	fprintf(stderr, "srt_socket: %s\n", srt_getlasterror_str());
-	return 1;
-      }
-
-      // Set some socket options
-      SRT_TRANSTYPE tt = SRTT_FILE;
-      srt_setsockopt(ss, 0, SRTO_TRANSTYPE, &tt, sizeof tt);
-
-      // Ge the port info
-      sa.sin_family = AF_INET;
-      sa.sin_port = htons(port);
-      if (inet_pton(AF_INET, hostname.c_str(), &sa.sin_addr) != 1) {
-        return 1;
-      }
-
-      srt_setsockflag(ss, SRTO_RCVSYN, &yes, sizeof yes);
-
-      // Bind to the port
-      st = srt_bind(ss, (struct sockaddr*)&sa, sizeof sa);
-      if (st == SRT_ERROR) {
-        fprintf(stderr, "srt_bind: %s\n", srt_getlasterror_str());
-        return 1;
-      }
-
-      bool done = false;
-      while (!done) {
-
-	// Listen for connection requests on this port
-	st = srt_listen(ss, 2);
-	if (st == SRT_ERROR) {
-	  fprintf(stderr, "srt_listen: %s\n", srt_getlasterror_str());
-	  return 1;
-	}
-
-	// Accept the connection.
-	std::cout << "Waiting for a connection" << std::endl;
-	int addr_size = sizeof their_addr;
-	int their_fd = srt_accept(ss, (struct sockaddr *)&their_addr, &addr_size);
-	std::cout << "Received a connection" << std::endl;
-
-	// Process the received packets
-	while (!done) {
-
-	  int recv = srt_recvmsg(their_fd, reinterpret_cast<char*>(buffer), packet_size);
-
-	  if (recv != SRT_ERROR) {
-	    done = !dec->decode(buffer, recv);
-	  } else {
-	    break;
-	  }
-
-	  done |= check_for_quit();
-	}
       }
 
     } else if (port > 0) {

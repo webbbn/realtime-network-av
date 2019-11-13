@@ -4,12 +4,6 @@
 [submodule "modules/rtaudio"]
 	path = modules/rtaudio
 	url = https://github.com/thestk/rtaudio.git
-[submodule "modules/srt"]
-	path = modules/srt
-	url = git@github.com:webbbn/srt.git
-[submodule "modules/pyv4l2"]
-	path = modules/pyv4l2
-	url = git@github.com:webbbn/pyv4l2.git
 [submodule "modules/mavlink_c"]
 	path = modules/mavlink_c
 	url = https://github.com/mavlink/c_library_v2.git

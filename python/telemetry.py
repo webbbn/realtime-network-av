@@ -7,7 +7,7 @@ import socket
 import struct
 import pymavlink.mavutil as mavutil
 from pymavlink.dialects.v10 import ardupilotmega as mavlink2
-from MultiWii import MultiWii
+from wifibroadcast.MultiWii import MultiWii
 
 class SerialTelemetryRx(object):
     """Receive telemetry over a standard UART connection"""
