@@ -78,7 +78,7 @@ if __name__ == '__main__':
     signal.signal(signal.SIGINT, exit_handler)
 
     # Try to start the camera
-    cam = camera.CameraProcess()
+    cam = camera.CameraProcess(port=5700, fec_ratio=0.5)
     if cam.start():
         air_side = True
         logging.info("Camera found. Running as Air side.")
@@ -87,27 +87,27 @@ if __name__ == '__main__':
         logging.info("Camera NOT found. Running as Ground side.")
 
     # Start the telemetry parsers / forwarders
-    telem = None
-    telem_uart = config['global'].get('telemetry_uart')
-    rc_host = config['global'].get('rc_host')
-    rc_port = int(config['global'].get('rc_port'))
-    if telem_uart and air_side and 0:
-        telem = telemetry.SerialTelemetryRx(uart=telem_uart, baudrate=115200, \
-                                            rc_host=rc_host, rc_port=rc_port)
-    else:
-        telem = None
+    # telem = None
+    # telem_uart = config['global'].get('telemetry_uart')
+    # rc_host = config['global'].get('rc_host')
+    # rc_port = int(config['global'].get('rc_port'))
+    # if telem_uart and air_side and 0:
+    #     telem = telemetry.SerialTelemetryRx(uart=telem_uart, baudrate=115200, \
+    #                                         rc_host=rc_host, rc_port=rc_port)
+    # else:
+    #     telem = None
 
     # Start the link status receiver
-    if air_side:
-        status = telemetry.UDPStatusRx(host="127.0.0.1", port=5801)
-    else:
-        status = telemetry.UDPStatusRx(host="127.0.0.1", port=5800)
+    # if air_side:
+    #     status = telemetry.UDPStatusRx(host="127.0.0.1", port=5801)
+    # else:
+    #     status = telemetry.UDPStatusRx(host="127.0.0.1", port=5800)
 
     # Start the transmitter reader interface
-    if not air_side:
-        trans = transmitter.Transmitter()
-    else:
-        trans = None
+    # if not air_side:
+    #     trans = transmitter.Transmitter()
+    # else:
+    #     trans = None
 
     # Start the UDP relay threads
     # tether = udp_relay.USBTetherRelay()
@@ -115,8 +115,8 @@ if __name__ == '__main__':
     # Join with the processing threads before shutting down
     # tether.join()
     # status.join()
-    if trans:
-        trans.join()
-    if telem:
-        telem.join()
+    # if trans:
+    #     trans.join()
+    # if telem:
+    #     telem.join()
     cam.join()

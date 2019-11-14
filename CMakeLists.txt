@@ -200,6 +200,7 @@ install(FILES "${PROJECT_SOURCE_DIR}/conf/fpvng" DESTINATION etc/default COMPONE
 
 # Install the service files
 install(FILES "${PROJECT_SOURCE_DIR}/services/fpvng.service" DESTINATION etc/systemd/system COMPONENT configuratios)
+install(FILES "${PROJECT_SOURCE_DIR}/services/telemetry.service" DESTINATION etc/systemd/system COMPONENT configuratios)
 
 # Create a windows installer
 if (WIN32)

@@ -54,13 +54,16 @@ class FPSLogger(object):
 
 class UDPOutputStream(object):
 
-    def __init__(self, host, port, broadcast = False, maxpacket = 1400):
+    def __init__(self, host, port, broadcast = False, maxpacket = 1400, fec_ratio=0.0):
         self.log = FPSLogger()
         self.broadcast = broadcast
         self.maxpacket = maxpacket
         self.host = host
         self.port = port
-        self.fec = fec.PyFECBufferEncoder(maxpacket, 0.5)
+        if fec_ratio > 0:
+            self.fec = fec.PyFECBufferEncoder(maxpacket, fec_ratio)
+        else:
+            self.fec = None
 
         # Create the communication socket
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -73,48 +76,13 @@ class UDPOutputStream(object):
             host = '<broadcast>'
         else:
             host = self.host
-        for b in self.fec.encode_buffer(s):
-            self.sock.sendto(b, (host, self.port))
-        # for i in range(0, len(s), self.maxpacket):
-        #     self.sock.sendto(s[i : min(i + self.maxpacket, len(s))], (host, self.port))
+        if self.fec:
+            for b in self.fec.encode_buffer(s):
+                self.sock.sendto(b, (host, self.port))
+        else:
+            for i in range(0, len(s), self.maxpacket):
+                self.sock.sendto(s[i : min(i + self.maxpacket, len(s))], (host, self.port))
 
-# class FECUDPOutputStream(object):
-
-#     def __init__(self, host, port, broadcast = False, maxpacket = 1310):
-#         self.log = FPSLogger()
-#         self.broadcast = broadcast
-#         self.maxpacket = maxpacket
-#         self.code_blocks = 8
-#         self.fec_blocks = 4
-#         self.host = host
-#         self.port = port
-#         self.frame_id = 0
-#         #self.fec = FECCode(self.code_blocks, self.fec_blocks)
-#         self.fec = fec.FECCode(self.code_blocks, self.fec_blocks)
-
-#         # Create the communication socket
-#         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-#         if broadcast:
-#             self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-
-#     def write(self, s):
-#         msg_len = len(s)
-#         count = 0
-#         sub_frame_len = self.maxpacket * self.code_blocks
-#         num_sub_frames = math.ceil(msg_len / sub_frame_len)
-#         sub_frame_id = 0
-#         for i in range(0, msg_len, sub_frame_len):
-#             sub_frame = s[i : i + sub_frame_len]
-#             # Encode the sub-frame into a set of FEC blocks
-#             fec_blocks = self.fec.encode_frame(sub_frame, frame_id=self.frame_id,
-#                                                sub_frame_id=sub_frame_id,
-#                                                num_sub_frames=num_sub_frames)
-#             for block in fec_blocks:
-#                 count += len(block)
-#                 self.sock.sendto(block, (host, self.port))
-#             sub_frame_id += 1
-#         self.frame_id = (self.frame_id + 1) % 255
-#         self.log.log(count)
 
 class WFBOutputStream(object):
 
@@ -228,7 +196,7 @@ class TCPOutputStream(object):
 
 class Camera(object):
 
-    def __init__(self, protocol, host, port, device=False):
+    def __init__(self, protocol, host, port, device=False, fec_ratio=0.0):
         self.streaming = False
         self.recording = False
 
@@ -254,7 +222,7 @@ class Camera(object):
 
         # Create the connection for streaming the data on
         if protocol.upper() == "UDP":
-            self.stream = UDPOutputStream(host, port)
+            self.stream = UDPOutputStream(host, port, fec_ratio=fec_ratio)
         elif protocol.upper() == "UDPB":
             self.stream = UDPOutputStream(host, port, broadcast=True)
         elif protocol.upper() == "FECUDP":
@@ -372,7 +340,7 @@ class CameraProcess(object):
 
     def __init__(self, device = False, protocol = "UDP", host = "", port = 5600, \
                  width = 1280, height = 720, bitrate = 4000000, quality = 20, inline_headers = True, \
-                 fps = 30, intra_period = 5):
+                 fps = 30, intra_period = 5, fec_ratio=0.0):
         self.device = device
         self.protocol = protocol
         self.host = host
@@ -384,6 +352,7 @@ class CameraProcess(object):
         self.inline_headers = inline_headers
         self.fps = fps
         self.intra_period = intra_period
+        self.fec_ratio = fec_ratio
 
     def start(self):
         h264_device = None
@@ -433,7 +402,7 @@ class CameraProcess(object):
             logging.info("Streaming %dx%d video to %s at %f Mbps Using %s protocol from %s" % \
                          (self.width, self.height, host_port, self.bitrate, self.protocol, h264_device))
 
-        self.camera = Camera(self.protocol, self.host, self.port, h264_device)
+        self.camera = Camera(self.protocol, self.host, self.port, h264_device, fec_ratio=self.fec_ratio)
         self.camera.streaming_params(self.width, self.height, self.bitrate, self.intra_period, self.quality,
                                      self.fps, self.inline_headers)
         self.proc = mp.Process(target=self.run)
@@ -450,8 +419,10 @@ class CameraProcess(object):
 
 if __name__ == '__main__':
     logging.basicConfig(level='DEBUG')
-    #cam = CameraProcess(host="192.168.1.38")
-    cam = CameraProcess()
+    # cam = CameraProcess(host="192.168.1.38", port=5600)
+    # cam = CameraProcess(host="127.0.0.1", port=5600)
+    cam = CameraProcess(host="127.0.0.1", port=5700, fec_ratio=0.5)
+    #cam = CameraProcess()
     if cam.start():
         cam.join()
     else:
