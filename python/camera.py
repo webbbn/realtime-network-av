@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 
 import socket
 import struct
@@ -339,7 +340,7 @@ class Camera(object):
 class CameraProcess(object):
 
     def __init__(self, device = False, protocol = "UDP", host = "", port = 5600, \
-                 width = 1280, height = 720, bitrate = 4000000, quality = 20, inline_headers = True, \
+                 width = 1280, height = 720, bitrate = 3000000, quality = 20, inline_headers = True, \
                  fps = 30, intra_period = 5, fec_ratio=0.0):
         self.device = device
         self.protocol = protocol
