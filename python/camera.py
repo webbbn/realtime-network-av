@@ -9,9 +9,9 @@ import math
 import numpy as np
 import subprocess
 import multiprocessing as mp
-#import py_v4l2 as v4l
-#from py_v4l2 import Frame
-#from py_v4l2 import Control
+import wifibroadcast.py_v4l2 as v4l
+from wifibroadcast.py_v4l2 import Frame
+from wifibroadcast.py_v4l2 import Control
 
 from wifibroadcast.format_as_table import format_as_table
 from wifibroadcast import fec
@@ -421,10 +421,10 @@ class CameraProcess(object):
 if __name__ == '__main__':
     logging.basicConfig(level='DEBUG')
     # cam = CameraProcess(host="192.168.1.38", port=5600)
-    # cam = CameraProcess(host="127.0.0.1", port=5600)
-    cam = CameraProcess(host="127.0.0.1", port=5700, fec_ratio=0.5)
+    cam = CameraProcess(host="127.0.0.1", port=5700, width=2560, height=1280, fec_ratio=0.5)
+    # cam = CameraProcess(host="127.0.0.1", port=5700, fec_ratio=0.5)
     #cam = CameraProcess()
     if cam.start():
         cam.join()
     else:
-        LOG_ERROR << "Error starting camera process"
+        logging.error("Error starting camera process")
