@@ -61,7 +61,7 @@ typedef boost::asio::io_service io_context;
 typedef boost::asio::io_context io_context;
 #endif
 
-constexpr size_t g_packet_size =3000;
+constexpr size_t g_packet_size =1400;
 bool g_done;
 std::thread *g_send_thread = 0;
 
@@ -92,9 +92,9 @@ void sig_handler(int s){
 
 // Change these to your liking...
 // or modify the program to take them cmd arguments!
-#define DEVICE_NAME "/dev/video2"
-#define FRAME_WIDTH 1920
-#define FRAME_HEIGHT 1080
+#define DEVICE_NAME "/dev/video0"
+#define FRAME_WIDTH 2560
+#define FRAME_HEIGHT 1280
 
 // This determines the number of "working" buffers we
 // tell the device that it can use. I guess 3 is an OK
@@ -103,7 +103,7 @@ void sig_handler(int s){
 
 int main(int argc, char **argv) {
   namespace ip=boost::asio::ip;
-  int port = 1234;
+  int port = 5600;
 
   // Configure the signal handler to close gracefully
   struct sigaction sigIntHandler;
@@ -128,10 +128,11 @@ int main(int argc, char **argv) {
 
   // Configure the UDP interfact to broadcast.
   //sock.set_option(ip::udp::socket::reuse_address(true));
-  sock.set_option(boost::asio::socket_base::broadcast(true));
+  //sock.set_option(boost::asio::socket_base::broadcast(true));
 
   // Create the broadcast endpoint to send to.
-  ip::udp::endpoint udp_bcast_endpoint(ip::address_v4::broadcast(), port);
+  //ip::udp::endpoint udp_bcast_endpoint(ip::address_v4::broadcast(), port);
+  ip::udp::endpoint udp_bcast_endpoint(ip::address::from_string("127.0.0.1"), port);
 
   // Open the device
   int fd = v4l2_open(DEVICE_NAME, O_RDWR | O_NONBLOCK, 0);
