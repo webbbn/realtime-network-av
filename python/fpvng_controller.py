@@ -78,7 +78,7 @@ if __name__ == '__main__':
     signal.signal(signal.SIGINT, exit_handler)
 
     # Try to start the camera
-    cam = camera.CameraProcess(port=5700, fec_ratio=0.5)
+    cam = camera.CameraProcess(width=2560, height=1280, port=5700, fec_ratio=0.5)
     if cam.start():
         air_side = True
         logging.info("Camera found. Running as Air side.")
