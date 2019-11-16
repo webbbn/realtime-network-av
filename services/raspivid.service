@@ -1,0 +1,15 @@
+[Unit]
+Description=Raspberry Pi video streamer
+After=wfb_config.service
+
+[Service]
+Type=simple
+ExecStart=/bin/sh -c "/usr/bin/raspivid -t 0 -b 3000000 -fps 30 -g 5 -ih -fl -w 1280 -h 720 -sh 75  -o - | /usr/bin/socat -b1400 - udp-sendto:127.0.0.1:5600"
+ExecReload=/bin/kill -1 $MAINPID
+ExecStop=/bin/kill -9 $MAINPID
+TimeoutStopSec=5s
+Restart=on-failure
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target
