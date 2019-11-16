@@ -136,8 +136,10 @@ add_executable(video_stream_player
   src/ffmpeg_decoder.cc
   src/sdl_osd.cc
   src/sdl_render_window.cc
-  src/transmitter.cc)
-target_link_libraries(video_stream_player ${AVCODEC_LIBRARIES} ${AVFORMAT_LIBRARIES} ${AVUTIL_LIBRARIES} ${SWSCALE_LIBRARIES} ${SDL2_LIBRARIES} ${SDL2_TTF_LIBRARY} ${SDL2_IMAGE_LIBRARY} ${SDL2_GFX_LIBRARY} ${Boost_LIBRARIES} ${Extra_Libraries} ssl crypto pcap)
+  src/transmitter.cc
+  src/fec.c
+  src/fec.cc)
+target_link_libraries(video_stream_player ${AVCODEC_LIBRARIES} ${AVFORMAT_LIBRARIES} ${AVUTIL_LIBRARIES} ${SWSCALE_LIBRARIES} ${SDL2_LIBRARIES} ${SDL2_TTF_LIBRARY} ${SDL2_IMAGE_LIBRARY} ${SDL2_GFX_LIBRARY} ${Boost_LIBRARIES} ${Extra_Libraries} ssl crypto)
 install(TARGETS video_stream_player DESTINATION ${BinDir} COMPONENT applications)
 
 find_library(V4L_LIBRARY v4l2)
@@ -174,9 +176,9 @@ if (OPENMAXIL_LIBRARY)
   install(TARGETS rpi_video_player DESTINATION ${BinDir} COMPONENT applications)
 endif ()
 
-add_executable(csrf_receiver src/csrf_receiver.cc)
-install(TARGETS csrf_receiver DESTINATION ${BinDir} COMPONENT applications)
-target_link_libraries(csrf_receiver ${Boost_LIBRARIES} pthread)
+#add_executable(csrf_receiver src/csrf_receiver.cc)
+#install(TARGETS csrf_receiver DESTINATION ${BinDir} COMPONENT applications)
+#target_link_libraries(csrf_receiver ${Boost_LIBRARIES} pthread)
 
 # Add the wifibroadcast directory to the build
 #add_subdirectory(${PROJECT_SOURCE_DIR}/wifibroadcast)

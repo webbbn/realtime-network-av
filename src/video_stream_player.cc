@@ -23,6 +23,7 @@
 #include <sdl_render_window.hh>
 #include <transmitter.hh>
 #include <shared_queue.hh>
+#include <fec.hh>
 
 namespace po=boost::program_options;
 namespace ip=boost::asio::ip;
@@ -50,6 +51,7 @@ int main(int argc, char* argv[]) {
   uint16_t port;
   uint32_t packet_size;
   bool use_udp;
+  bool use_fec;
   uint32_t win_x;
   uint32_t win_y;
   bool windowed;
@@ -65,6 +67,7 @@ int main(int argc, char* argv[]) {
     ("packet_size", po::value<uint32_t>(&packet_size)->default_value(32767),
      "the size of the packet buffer (the maximum size of a packet)")
     ("use_udp,U", po::bool_switch(&use_udp), "use the UDP protocol rather than TCP")
+    ("fec", po::bool_switch(&use_fec), "FEC decode the incoming video packets")
     ("win_x", po::value<uint32_t>(&win_x)->default_value(SDL_WINDOWPOS_UNDEFINED),
      "the X component of the starting location of the window")
     ("win_y", po::value<uint32_t>(&win_y)->default_value(SDL_WINDOWPOS_UNDEFINED),
@@ -176,26 +179,41 @@ int main(int argc, char* argv[]) {
     // Create the decoder class
     dec.reset(new FFMpegDecoder(AV_CODEC_ID_H264, draw_cb));
 
-    // Allocate the packet buffer.
-    uint8_t *buffer = new uint8_t[packet_size];
-
     if (use_udp) {
-      boost::asio::ip::udp::endpoint listen_endpoint(boost::asio::ip::address_v4::any(), port);
-      ip::udp::socket sock(io_context, listen_endpoint);
-      sock.set_option(boost::asio::socket_base::broadcast(true));
-
+      SharedQueue<std::shared_ptr<std::vector<uint8_t> > > udpq;
       bool done = false;
-      while (!done) {
-	boost::asio::ip::udp::endpoint sender_endpoint;
-	size_t recv = sock.receive_from(boost::asio::buffer(buffer, packet_size), sender_endpoint);
-	if (recv) {
-	  done = !dec->decode(buffer, recv);
+      auto udp_recv_thr = [port, &io_context, &udpq, &done, packet_size]() {
+	boost::asio::ip::udp::endpoint listen_endpoint(boost::asio::ip::address_v4::any(), port);
+	ip::udp::socket sock(io_context, listen_endpoint);
+	sock.set_option(boost::asio::socket_base::broadcast(true));
+	while (!done) {
+	  std::shared_ptr<std::vector<uint8_t> > buffer(new std::vector<uint8_t>(packet_size));
+	  boost::asio::ip::udp::endpoint sender_endpoint;
+	  size_t recv = sock.receive_from(boost::asio::buffer(buffer->data(), packet_size), sender_endpoint);
+	  if (recv > 0) {
+	    buffer->resize(recv);
+	    udpq.push(buffer);
+	  }
+	}
+      };
+      std::thread udpthr(udp_recv_thr);
+      FECDecoder fecdec;
+      while(!done) {
+	std::shared_ptr<std::vector<uint8_t> > buffer = udpq.pop();
+	if (use_fec) {
+	  fecdec.add_block(buffer->data(), buffer->size());
+	  for (std::shared_ptr<FECBlock> blk = fecdec.get_block(); blk; blk = fecdec.get_block()) {
+	    done = !dec->decode(blk->data(), blk->data_length());
+	  }
+	} else {
+	  done = !dec->decode(buffer->data(), buffer->size());
 	}
 	done |= check_for_quit();
       }
 
     } else if (port > 0) {
 
+      uint8_t *buffer = new uint8_t[packet_size];
       ip::tcp::acceptor acceptor(io_context, ip::tcp::endpoint(ip::tcp::v4(), port));
       bool done = false;
       while (!done) {
@@ -217,6 +235,8 @@ int main(int argc, char* argv[]) {
 	  done |= check_for_quit();
 	}
       }
+
+      delete [] buffer;
 
     } else {
 
@@ -254,8 +274,6 @@ int main(int argc, char* argv[]) {
     }
 
     draw_thread.join();
-
-    delete [] buffer;
 }
 
   return 0;
