@@ -210,18 +210,32 @@ class CameraProcess(object):
         self.bitrate = bitrate
         self.quality = quality
         self.inline_headers = inline_headers
-        self.fps = fps
         self.intra_period = intra_period
         self.fec_ratio = fec_ratio
-        self.device = None;
+        self.width = width
+        self.height = height
+        self.device = device
+        self.fps = fps
+        self.prefer_picam = prefer_picam
+
+    def start(self):
+        self.proc = mp.Process(target=self.run)
+        self.proc.start()
+        return True;
+
+    def run(self):
+        if self.host != "":
+            host_port = self.host + ":" + str(self.port)
+        else:
+            host_port = str(self.port)
 
         # Find the camera that best fits the user specified parameters
-        modes = detect_cameras(device)
+        modes = detect_cameras(self.device)
         if not modes:
             logging.error("No camera matching the specified parameters were detected")
             return
         logging.debug(format_as_table(modes, modes[0].keys(), modes[0].keys(), 'device', add_newline=True))
-        mode = best_camera(modes, width, height, prefer_picam, device)
+        mode = best_camera(modes, self.width, self. height, self.prefer_picam, self.fps, self.device)
         if not mode:
             logging.error("No camera matching the specified parameters were detected")
             return
@@ -229,27 +243,15 @@ class CameraProcess(object):
         self.height = mode['height']
         self.device = mode['device']
         self.type = mode['type']
+        self.fps = max(self.fps, mode['fps'])
 
-    def start(self):
-        if not self.device:
-            return False
-
-        if self.host != "":
-            host_port = self.host + ":" + str(self.port)
-        else:
-            host_port = str(self.port)
-        logging.info("Streaming %dx%d video to %s at %f Mbps from %s" % \
-                     (self.width, self.height, host_port, self.bitrate, self.device))
+        logging.info("Streaming %dx%d/%d video to %s at %f Mbps from %s" % \
+                     (self.width, self.height, self.fps, host_port, self.bitrate, self.device))
 
         self.camera = Camera(self.host, self.port, self.device, fec_ratio=self.fec_ratio)
         self.camera.streaming_params(self.width, self.height, self.bitrate, self.intra_period, self.quality,
                                      self.fps, self.inline_headers)
-        self.proc = mp.Process(target=self.run)
-        self.proc.start()
 
-        return True;
-
-    def run(self):
         # Start streaming
         self.camera.start_streaming()
 
@@ -273,24 +275,81 @@ def detect_cameras(device = None):
 
         # Try to detect the first pi camera
         try:
-            cam = picamera.camera.Camera(camera_num=0)
+            cam = picamera.PiCamera(camera_num=0)
             type = cam.revision
-            logging.info("Find Raspberry Pi camera 1 " + str(type))
-            pycam_types.append(type)
-        finally:
+            logging.info("Found Raspberry Pi camera 1 " + type)
+            picam_types.append(type)
             cam.close()
+        except:
+            pass
 
         # Try to detect the second pi camera
         try:
-            cam = picamera.camera.Camera(camera_num=1)
+            cam = picamera.PiCamera(camera_num=1)
             type = cam.revision
-            logging.info("Find Raspberry Pi camera 2 " + str(type))
-            pycam_types.append(type)
-        finally:
+            logging.info("Find Raspberry Pi camera 2 " + type)
+            picam_types.append(type)
             cam.close()
+        except:
+            pass
 
         # Fill in the standard pi camera modes
+        for idx, type in enumerate(picam_types):
+            if idx == 0:
+                device = 'picam1'
+            else:
+                device = 'picam2'
 
+            # V1 camera
+            if type == 'ov5647':
+                cam_modes.append({ 'type': 'picam',
+                                     'device': device,
+                                     'width': 1920,
+                                     'height': 1080,
+                                     'fps': 30 })
+                cam_modes.append({ 'type': 'picam',
+                                     'device': device,
+                                     'width': 1296,
+                                     'height': 972,
+                                     'fps': 42 })
+                cam_modes.append({ 'type': 'picam',
+                                     'device': device,
+                                     'width': 1296,
+                                     'height': 730,
+                                     'fps': 49 })
+                cam_modes.append({ 'type': 'picam',
+                                     'device': device,
+                                     'width': 640,
+                                     'height': 480,
+                                     'fps': 90 })
+
+            # V2 camera
+            if type == 'imx219':
+                cam_modes.append({ 'type': 'picam',
+                                     'device': device,
+                                     'width': 1920,
+                                     'height': 1080,
+                                     'fps': 30 })
+                cam_modes.append({ 'type': 'picam',
+                                     'device': device,
+                                     'width': 1640,
+                                     'height': 1232,
+                                     'fps': 40 })
+                cam_modes.append({ 'type': 'picam',
+                                     'device': device,
+                                     'width': 1640,
+                                     'height': 922,
+                                     'fps': 40 })
+                cam_modes.append({ 'type': 'picam',
+                                     'device': device,
+                                     'width': 1280,
+                                     'height': 720,
+                                     'fps': 90 })
+                cam_modes.append({ 'type': 'picam',
+                                     'device': device,
+                                     'width': 640,
+                                     'height': 480,
+                                     'fps': 200 })
 
     # Try to find an H264 capable device
     for d in v4l.get_devices():
@@ -307,7 +366,8 @@ def detect_cameras(device = None):
                     cam_modes.append({ 'type': 'v4l2',
                                        'device': d,
                                        'width': format["width"],
-                                       'height': format["height"] })
+                                       'height': format["height"],
+                                       'fps': 30 })
                     logging.info("Found V4L2: " + d + " " + str(format["width"]) + "x" +  str(format["height"]))
         except Exception as e:
             continue
@@ -315,7 +375,7 @@ def detect_cameras(device = None):
     return cam_modes
 
 
-def best_camera(modes, width = 10000, height = 10000, prefer_picam=True, device=None):
+def best_camera(modes, width = 10000, height = 10000, fps = 60, prefer_picam=True, device=None):
     '''Find the camera mode that best fits the specified parameters'''
 
     # Find the device/mode that is closest to the users selection
