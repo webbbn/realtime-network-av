@@ -5,7 +5,8 @@ def format_as_table(data,
                     keys,
                     header=None,
                     sort_by_key=None,
-                    sort_order_reverse=False):
+                    sort_order_reverse=False,
+                    add_newline=False):
     """Takes a list of dictionaries, formats the data, and returns
     the formatted data as a text table.
 
@@ -55,4 +56,6 @@ def format_as_table(data,
             data_to_format.append(pair[1])
             data_to_format.append(element[pair[0]])
         formatted_data += format % tuple(data_to_format)
+    if add_newline:
+        return '\n' + formatted_data
     return formatted_data
