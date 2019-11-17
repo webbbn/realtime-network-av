@@ -29,7 +29,7 @@ if (USE_CYTHON)
 endif ()
 
 # Install the python executable scripts
-install(PROGRAMS fc_comm.py pycamera_tx.py fpvng_controller.py DESTINATION ${BinDir})
+install(PROGRAMS fc_comm.py pycamera_tx.py fpvng_controller DESTINATION ${BinDir})
 
 # Install the python libraries
 install(FILES

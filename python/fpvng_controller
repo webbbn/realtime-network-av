@@ -53,8 +53,8 @@ if __name__ == '__main__':
     config = configparser.ConfigParser()
     config['global'] = {
         'loglevel': 'error',
-        'video_width': 2560,
-        'video_height': 1280,
+        'video_width': 10000,
+        'video_height': 10000,
         'telemetry_uart': '',
         'rc_host': '127.0.0.1',
         'rc_port': 15441
@@ -78,7 +78,7 @@ if __name__ == '__main__':
     signal.signal(signal.SIGINT, exit_handler)
 
     # Try to start the camera
-    cam = camera.CameraProcess(width=2560, height=1280, port=5700, fec_ratio=0.5)
+    cam = camera.CameraProcess()
     if cam.start():
         air_side = True
         logging.info("Camera found. Running as Air side.")
