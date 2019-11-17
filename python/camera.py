@@ -243,7 +243,7 @@ class CameraProcess(object):
         self.height = mode['height']
         self.device = mode['device']
         self.type = mode['type']
-        self.fps = max(self.fps, mode['fps'])
+        self.fps = min(self.fps, mode['fps'])
 
         logging.info("Streaming %dx%d/%d video to %s at %f Mbps from %s" % \
                      (self.width, self.height, self.fps, host_port, self.bitrate, self.device))

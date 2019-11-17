@@ -41,13 +41,17 @@ import multiprocessing as mp
 from wifibroadcast import camera, telemetry
 #import transmitter, utp_relay
 
-config_filename = os.path.join(root_dir, "etc/default/fpvng")
-
 # Define an exit handler to do a graceful shutdown
 def exit_handler(sig, frame):
     sys.exit()
 
 if __name__ == '__main__':
+
+    # The config filename should be the first and only command line option
+    if len(sys.argv) != 2:
+        sys.stderr.write("Usage: " + sys.argv[0] + " <config file>\n")
+        exit(1)
+    config_filename = sys.argv[1]
 
     # Read the config file
     config = configparser.ConfigParser()
@@ -55,6 +59,13 @@ if __name__ == '__main__':
         'loglevel': 'error',
         'video_width': 10000,
         'video_height': 10000,
+        'fps': 60,
+        'bitrate': 3000000,
+        'quality': 20,
+        'inline_headers': True,
+        'intra_period': 5,
+        'prefer_picam': True,
+        'fec_ratio': 0,
         'telemetry_uart': '',
         'rc_host': '127.0.0.1',
         'rc_port': 15441
@@ -78,7 +89,15 @@ if __name__ == '__main__':
     signal.signal(signal.SIGINT, exit_handler)
 
     # Try to start the camera
-    cam = camera.CameraProcess()
+    cam = camera.CameraProcess(width=int(config['global'].get('video_width')),
+                               height=int(config['global'].get('video_height')),
+                               fps=int(config['global'].get('fps')),
+                               bitrate=int(config['global'].get('bitrate')),
+                               quality=int(config['global'].get('quality')),
+                               inline_headers=bool(config['global'].get('inline_headers')),
+                               intra_period=int(config['global'].get('intra_period')),
+                               prefer_picam=bool(config['global'].get('prefer_picam')),
+                               fec_ratio=float(config['global'].get('fec_ratio')))
     if cam.start():
         air_side = True
         logging.info("Camera found. Running as Air side.")
