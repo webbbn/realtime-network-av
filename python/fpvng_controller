@@ -66,9 +66,13 @@ if __name__ == '__main__':
         'intra_period': 5,
         'prefer_picam': True,
         'fec_ratio': 0,
-        'telemetry_uart': '',
+        'telemetry_uart': '/dev/ttyS0',
         'rc_host': '127.0.0.1',
-        'rc_port': 15441
+        'rc_port': 15441,
+        'telemetry_protocol': 'mavlink',
+        'telemetry_host': '127.0.0.1',
+        'telemetry_port': 14550,
+        'telemetry_uart': '/dev/ttyS0'
     }
     try:
         config.read(config_filename)
@@ -106,15 +110,10 @@ if __name__ == '__main__':
         logging.info("Camera NOT found. Running as Ground side.")
 
     # Start the telemetry parsers / forwarders
-    # telem = None
-    # telem_uart = config['global'].get('telemetry_uart')
-    # rc_host = config['global'].get('rc_host')
-    # rc_port = int(config['global'].get('rc_port'))
-    # if telem_uart and air_side and 0:
-    #     telem = telemetry.SerialTelemetryRx(uart=telem_uart, baudrate=115200, \
-    #                                         rc_host=rc_host, rc_port=rc_port)
-    # else:
-    #     telem = None
+    telem = telemetry.Telemetry(protocol=config['global'].get('telemetry_protocol'),
+                                uart=config['global'].get('telemetry_uart'),
+                                host=config['global'].get('telemetry_host'),
+                                port=int(config['global'].get('telemetry_port')))
 
     # Start the link status receiver
     # if air_side:
@@ -136,6 +135,5 @@ if __name__ == '__main__':
     # status.join()
     # if trans:
     #     trans.join()
-    # if telem:
-    #     telem.join()
+    telem.join()
     cam.join()

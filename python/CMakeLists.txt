@@ -38,6 +38,7 @@ install(FILES
   camera.py
   telemetry.py
   MultiWii.py
+  MavlinkTelemetry.py
   transmitter.py
   udp_relay.py
   DESTINATION ${RELATIVE_PYTHON_DIR})

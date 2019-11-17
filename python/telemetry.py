@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 
 import math
 import time
@@ -8,11 +9,13 @@ import struct
 import pymavlink.mavutil as mavutil
 from pymavlink.dialects.v10 import ardupilotmega as mavlink2
 from wifibroadcast.MultiWii import MultiWii
+from wifibroadcast.MavlinkTelemetry import MavlinkTelemetry
 
-class SerialTelemetryRx(object):
-    """Receive telemetry over a standard UART connection"""
+class Telemetry(object):
+    '''Process (send/receive/relay) telemetry of various types'''
 
-    def __init__(self, protocol = "msp", uart = "/dev/ttyS1", baudrate = 115200,
+    def __init__(self, protocol='mavlink', uart = "/dev/ttyS0", baudrate = 57600,
+                 host = "127.0.0.1", port = 14550,
                  rc_host = None, rc_port = 14551):
         self.uart = uart
         self.baudrate = baudrate
@@ -20,6 +23,8 @@ class SerialTelemetryRx(object):
         self.rc_host = rc_host
         self.rc_port = rc_port
         self.rc_chan = None
+        self.mavlink = None
+        self.thread = None
 
         if protocol == "msp":
 
@@ -34,8 +39,11 @@ class SerialTelemetryRx(object):
             self.thread = threading.Thread(target = self.start_msp)
 
         elif protocol == "mavlink":
-            self.mavs = mavutil.mavlink_connection(uart, baud=baudrate)
-            self.thread = threading.Thread(target = self.start_mavlink)
+
+            # Create the mavlink telemetry class
+            self.mavlink = MavlinkTelemetry(uart=uart, baudrate=baudrate, host=host, port=port,
+                                            rc_host=rc_host, rc_port=rc_port)
+
         else:
             raise Exception("Unsupported telemetry format: " + protocol)
 
@@ -46,17 +54,22 @@ class SerialTelemetryRx(object):
             self.recv_thread = None
 
         # Start the processing threads
-        self.thread.start()
-        self.recv_thread.start()
+        if self.thread:
+            self.thread.start()
+        if self.recv_thread:
+            self.recv_thread.start()
 
     def __del__(self):
         self.done = True
         self.join()
 
     def join(self):
-        self.thread.join()
+        if self.thread:
+            self.thread.join()
         if self.recv_thread:
             self.recv_thread.start()
+        if self.mavlink:
+            self.mavlink.join()
 
     def start_msp(self):
 
@@ -109,12 +122,6 @@ class SerialTelemetryRx(object):
 
             # Unpack the channels
             self.rc_chan = struct.unpack("<HHHHHHHHHHHHHHHH", data)
-
-    def start_mavlink(self):
-        while not self.done:
-            msg = self.mavs.recv_msg()
-            if msg:
-                self.queue.put(msg)
 
 class UDPTelemetryRx(object):
     """Receive telemetry over a standard UDP port"""
@@ -209,6 +216,6 @@ class UDPStatusRx(object):
         self.thread.join()
 
 if __name__ == '__main__':
-    telem = SerialTelemetryRx(rc_host="127.0.0.1")
-    status = UDPStatusRx(host="127.0.0.1", port=5801)
-    status.join()
+    # /dev/ttyS0 pi, /dev/ttyS1 nanopi
+    telem = Telemetry(uart='/dev/ttyS1')
+    telem.join()
