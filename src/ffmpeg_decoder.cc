@@ -6,8 +6,6 @@ FFMpegDecoder::FFMpegDecoder(AVCodecID decoder, DrawCallback cb) :
    m_parser(0), m_format_ctx(0), m_sws_ctx(0), m_y_plane(0), m_u_plane(0), m_v_plane(0),
    m_draw(cb) {
 
-  av_register_all();
-
   // Find the decoder
   if (!(m_codec = avcodec_find_decoder(decoder))) {
     std::cerr << "Error finding the decoder" << std::endl;
@@ -34,20 +32,17 @@ FFMpegDecoder::FFMpegDecoder(AVCodecID decoder, DrawCallback cb) :
 FFMpegDecoder::FFMpegDecoder(const std::string &url, DrawCallback cb) :
   m_format_ctx(0), m_sws_ctx(0), m_draw(cb) {
 
-  av_register_all();
-
   // Register the network interface
   avformat_network_init();
 
   // Open the input stream.
   AVDictionary *opts = 0;
   //av_dict_set(&opts, "rtsp_transport", "tcp", 0);
-  //av_dict_set_int(&opts, "timeout", 10000000, 0);
+  av_dict_set_int(&opts, "timeout", 10000000, 0);
   av_dict_set_int(&opts, "stimeout", 1000000, 0);
   av_dict_set_int(&opts, "rw_timeout", 1000000, 0);
   av_dict_set_int(&opts, "reorder_queue_size", 1, 0);
   av_dict_set(&opts, "rtsp_transport", "tcp", 0);
-  //if (avformat_open_input(&m_format_ctx, url.c_str(), NULL, &opts) != 0) {
   if (avformat_open_input(&m_format_ctx, url.c_str(), NULL, &opts) != 0) {
     std::cerr << "Error connecting to the server" << std::endl;
     exit(1);

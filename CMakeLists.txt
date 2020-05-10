@@ -8,6 +8,7 @@ option(USE_CYTHON "Build programs that requite cython" ON)
 set(CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
 
 INCLUDE(VersionMacros)
+INCLUDE(FindPkgConfig)
 
 if (WIN32)
   set(Extra_Libraries "ws2_32")
@@ -119,10 +120,10 @@ find_path(DCADEC_INCLUDE_DIR libdcadec/common.h PATHS ${PROJECT_SOURCE_DIR}/modu
 find_library(DCADEC_LIBRARY dcacec PATHS ${PROJECT_SOURCE_DIR}/modules/dcadec)
 include_directories(${DCADEC_INCLUDE_DIR})
 
-find_package(SDL2)
-find_library(SDL2_TTF_LIBRARY SDL2_ttf)
-find_library(SDL2_IMAGE_LIBRARY SDL2_image)
-find_library(SDL2_GFX_LIBRARY SDL2_gfx)
+pkg_search_module(SDL2 REQUIRED sdl2)
+pkg_search_module(SDL2TTF REQUIRED SDL2_ttf)
+pkg_search_module(SDL2IMAGE REQUIRED SDL2_image)
+pkg_search_module(SDL2GFX REQUIRED SDL2_gfx)
 
 # Add the mavlink directory to the build
 include_directories(${PROJECT_SOURCE_DIR}/modules/mavlink_c/common)
@@ -139,7 +140,19 @@ add_executable(video_stream_player
   src/transmitter.cc
   src/fec.c
   src/fec.cc)
-target_link_libraries(video_stream_player ${AVCODEC_LIBRARIES} ${AVFORMAT_LIBRARIES} ${AVUTIL_LIBRARIES} ${SWSCALE_LIBRARIES} ${SDL2_LIBRARIES} ${SDL2_TTF_LIBRARY} ${SDL2_IMAGE_LIBRARY} ${SDL2_GFX_LIBRARY} ${Boost_LIBRARIES} ${Extra_Libraries} ssl crypto)
+target_link_libraries(video_stream_player
+  ${AVCODEC_LIBRARIES}
+  ${AVFORMAT_LIBRARIES}
+  ${AVUTIL_LIBRARIES}
+  ${SWSCALE_LIBRARIES}
+  ${SDL2_LIBRARIES}
+  ${SDL2TTF_LIBRARIES}
+  ${SDL2IMAGE_LIBRARIES}
+  ${SDL2GFX_LIBRARIES}
+  ${Boost_LIBRARIES}
+  ${Extra_Libraries}
+  ssl
+  crypto)
 install(TARGETS video_stream_player DESTINATION ${BinDir} COMPONENT applications)
 
 find_library(V4L_LIBRARY v4l2)
